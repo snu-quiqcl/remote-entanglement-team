@@ -40,10 +40,6 @@ class ExperimenterGUI(QtWidgets.QMainWindow, exp_gui, experimenter_theme_base):
         if self.sequencer.is_opened:
             self.BTN_connect_FPGA.setChecked(True)
             
-        if not os.path.isdir(dirname + "/data"):
-            os.mkdir(dirname + "/data")
-            self.toStatusBar("No data folder has been found. Created one.")
-            
     def __call__(self):
         return self.experiment_dict
 
@@ -71,8 +67,8 @@ class ExperimenterGUI(QtWidgets.QMainWindow, exp_gui, experimenter_theme_base):
             self.BTN_connect_FPGA.setEnabled(True)
         
     def openFolder(self):
-        data_file_dir = os.path.abspath(dirname + "/data")
-        os.startfile(data_file_dir)
+        os.startfile(dirname + "/data")
+        
         
     def _addTab(self, name, widget):
         self.tab_dict[name] = widget

@@ -90,9 +90,6 @@ class RF_ControllerGUI(QtWidgets.QMainWindow, RF_client_theme_base, main_ui):
         if device == "RF": # Upper level
             if cmd == "CON":
                 self._initUi(self.controller.RF_dict)
-                self.BTN_connect.setChecked(True)
-            elif cmd == "DCN":
-                self.BTN_connect.setChecked(False)
                 
         elif device in self.controller.RF_dict.keys():
             self.panel_dict[device].updateGUI(cmd, data)

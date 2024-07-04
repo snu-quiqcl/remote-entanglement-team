@@ -10,8 +10,9 @@ import numpy as np
 import pandas as pd
 import datetime
 
-import pyqtgraph as pg
-pg.setConfigOptions(antialias=True)
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 filename = os.path.abspath(__file__)
 dirname = os.path.dirname(filename)
@@ -19,12 +20,12 @@ dirname = os.path.dirname(filename)
 # PyQt libraries
 from PyQt5 import uic, QtWidgets, QtGui
 from PyQt5.QtCore    import pyqtSignal, QMutex, QWaitCondition, QThread
-from PyQt5.QtGui     import QColor
-from PyQt5.QtWidgets import QVBoxLayout, QFileDialog
+from PyQt5.QtWidgets import QVBoxLayout
 
 # Custom widgets
-from .Connection_widget import CustomDevice, InternalRF_Device
-# from .
+from .Connection_widget import CustomDevice
+
+
 
 ph_ui_file = dirname + "/ui/parametric_heating.ui"
 ph_ui, _ = uic.loadUiType(ph_ui_file)
@@ -58,7 +59,7 @@ class ParametricHeatingGUI(QtWidgets.QWidget, ph_ui):
         self.sequencer.sig_occupied.connect(self._setInterlock)
 
         self.setupUi(self)
-        self.canvas, self.ax, self.plot = self._create_canvas(self.GBOX_plot)
+        self.toolbar, self.ax, self.canvas, self.plot = self._create_canvas(self.GBOX_plot)
         
         self.initUi()
         self.plot_handler = PlotHandler(self)
@@ -66,55 +67,38 @@ class ParametricHeatingGUI(QtWidgets.QWidget, ph_ui):
         self.plot_handler.finished_signal.connect(self.finishedRun)
         
         self.disable_list = [self.BTN_start, self.con.BTN_connection]
-        
-        
-    def showEvent(self, event):
-        self.updatePlot()
 
+        
     def initUi(self):
         self.custom_con = CustomDevice(self)
-        self.internal_con = InternalRF_Device(self) # This should be changed later
+        self.non_custom_con = CustomDevice() # This should be changed later
         
         self.GBOX_device.layout().addWidget(self.custom_con)
-        self.GBOX_device.layout().addWidget(self.internal_con)
+        self.GBOX_device.layout().addWidget(self.non_custom_con)
         
         self.changeConnectionDevice()
         
-        if not os.path.isdir(dirname + "/../data/parametric_heating"):
-            os.mkdir(dirname + "/../data/parametric_heating")
-                
-    def updatePlot(self):      
-        if (not self.isHidden() and not self.isMinimized()):
-            if self.CBOX_Auto.isChecked():
-                self.ax.setYRange(self.plot_handler.y_min, self.plot_handler.y_max)
-                self.TXT_ymax.setText(self.plot_handler.y_max)
-                self.TXT_ymin.setText(self.plot_handler.y_min)
-                
-            else:
-                y_max = self.plot_handler.y_max
-                y_min = self.plot_handler.y_min
-                
-                self.ax.setYRange(y_min, y_max)
-                
-            self.progressBar.setValue(self.plot_handler.percentage)
-            QtWidgets.QApplication.processEvents()
-            
+    def updatePlot(self, percentage):
+        if self.CBOX_Auto.isChecked():
+            self.TXT_ymax.setText("%.2f" % self.plot_handler.y_max)
+            self.TXT_ymin.setText("%.2f" % self.plot_handler.y_min)
+            self.changedYLimit()
+        else:
+            self.canvas.draw()
+        self.progressBar.setValue(percentage)
 
     def changeConnectionDevice(self):
         if self.CBOX_custom.isChecked():
-            self.internal_con.hide()
+            self.non_custom_con.hide()
             self.custom_con.show()
             self.con = self.custom_con
         else:
             self.custom_con.hide()
-            self.internal_con.show()
-            self.con = self.internal_con
+            self.non_custom_con.show()
+            self.con = self.non_custom_con
        
     @checkError
     def pressedStartButton(self, flag):
-        self.BTN_save.setEnabled(not flag)
-        self.BTN_save.setEnabled(not flag)
-        
         if flag:
             if not self.sequencer.is_opened:
                 self.toStatusBar("The FPGA is not opened!")
@@ -137,8 +121,6 @@ class ParametricHeatingGUI(QtWidgets.QWidget, ph_ui):
                 except Exception as ee:
                     self.toStatusBar("An error while setting the experiment (%s)." % ee)
                     self.BTN_start.setChecked(False)
-                    self.BTN_save.setEnabled(True)
-                    self.BTN_save.setEnabled(True)
                     return
                 
                 self.sequencer.occupant = "parametric_heating"
@@ -150,26 +132,6 @@ class ParametricHeatingGUI(QtWidgets.QWidget, ph_ui):
             self.plot_handler.wakeupThread()  # This make sure the thread stops
             self.sequencer.occupant = ""
             self.sequencer.sig_occupied.emit(False)
-            
-    @checkError
-    def pressedSaveButton(self):
-        file_name, _ = QFileDialog.getSaveFileName(self, 'Save file', os.path.abspath(dirname + "/../data/"))
-        if file_name == "":
-            self.toStatusBar("Aborted saving a data file.")
-        else:
-            self.plot_handler.setSaveFileName(file_name)
-            self.plot_handler.scan_idx = self.plot_handler.total_length # This make sure the thread's logic jumps to the save logic
-            self.plot_handler.start()
-        
-    @checkError
-    def pressedLoadButton(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, 'Open file', os.path.abspath(dirname + "/../data/"))
-        if file_name == "":
-            self.toStatusBar("Aborted loading a save file.")
-        else:
-            pass
-            # with open (file_name, "rb") as fr:
-            #     pkl_data = pickle.load(fr)
 
     @checkError
     def cancelStartButton(self, no_input=True):
@@ -215,49 +177,72 @@ class ParametricHeatingGUI(QtWidgets.QWidget, ph_ui):
         for enb_object in self.disable_list:
             enb_object.setEnabled(flag)
             
-    def _create_canvas(self, frame):
-        if self._theme == "black":
-            pg.setConfigOption('background', QColor(40, 40, 40))
-            styles = {"color": "#969696","font-size": "15px", "font-family": "Arial"}
-            self.line_color = QColor(141, 211, 199)
-            
-        else:
-            pg.setConfigOption('background', 'w')
-            pg.setConfigOption('foreground', 'k')
-            styles = {"color": "k", "font-size": "15px", "font-family": "Arial"}
-
-            self.line_color = QColor(31, 119, 180)
-        self.line_width = 3
+    def _create_canvas(self, gbox):
+        fig = plt.Figure(tight_layout=True)
+        canvas = FigureCanvas(fig)
+        toolbar = NavigationToolbar(canvas, self)
         
-        canvas = pg.GraphicsLayoutWidget()
-        ax = canvas.addPlot()
-        ax.setDefaultPadding(0)
-
         layout = QVBoxLayout()
-        layout.layoutLeftMargin = 0
-        layout.layoutRightMargin = 0
-        layout.layoutTopMargin = 0
-        layout.layoutBottomMargin = 0
+        layout.addWidget(toolbar)
         layout.addWidget(canvas)
+        gbox.setLayout(layout)
         
-        frame.setLayout(layout)
+        ax = fig.add_subplot(1,1,1)
+        spine_list = ['bottom', 'top', 'right', 'left']
         
-        plot = ax.plot([], [], pen=pg.mkPen(self.line_color, width=self.line_width))
-        
-        ax.setLabel("bottom", "Frequency (MHz)", **styles)
-        ax.setLabel("left", "PMT counts", **styles)
-        
-        return canvas, ax, plot
 
+        if self._theme == "black":
+            plt.style.use('dark_background')
+            plt.rcParams.update({"savefig.facecolor": [0.157, 0.157, 0.157],
+                                "savefig.edgecolor": [0.157, 0.157, 0.157]})
+            
+            fig.set_facecolor([0.157, 0.157, 0.157])
+            ax.set_facecolor([0.157, 0.157, 0.157])
+            ax.tick_params(axis='x', colors=[0.7, 0.7, 0.7], length=0)
+            ax.tick_params(axis='y', colors=[0.7, 0.7, 0.7], length=0)
+            ax.xaxis.label.set_color([0.7, 0.7, 0.7])
+            ax.yaxis.label.set_color([0.7, 0.7, 0.7])
+            
+            for spine in spine_list:
+                ax.spines[spine].set_color([0.7, 0.7, 0.7])
+
+            for action in toolbar.actions():
+                action_text = action.text()
+                action.setIcon(QtGui.QIcon(os.path.dirname(dirname) + '/icons/%s.png' % action_text))
+                
+            plot, = ax.plot([], [], "C4")
+            
+            
+        elif self._theme == "white":
+            plt.style.use('default')
+            plt.rcParams.update({"savefig.facecolor": [1, 1, 1],
+                                "savefig.edgecolor": [1, 1, 1]})
+            fig.set_facecolor([1, 1, 1])
+            ax.set_facecolor([1, 1, 1])
+            ax.tick_params(axis='x', colors='k', length=0)
+            ax.tick_params(axis='y', colors='k', length=0)
+            
+            for spine in spine_list:
+                ax.spines[spine].set_color('k')
+            toolbar.setStyleSheet("background-color:rgb(255, 255, 255);")
+            
+            plot, = ax.plot([], [], "C3")
+            
+        ax.set_ylabel("Number of photons")
+        ax.set_xlabel("Modulation frequency [MHz]")
+        ax.set_ylim(0, 100)
+        ax.set_xlim(1, 2)
+        return toolbar, ax, canvas, plot
+            
 #%%
 class PlotHandler(QThread):
     
-    update_signal = pyqtSignal()
+    update_signal = pyqtSignal(int)
     finished_signal = pyqtSignal()
     
     def __init__(self, parent=None):
         super().__init__()
-        self.parent  = parent
+        self.parent = parent
         self.ax      = parent.ax
         self.plot    = parent.plot
         self.con     = parent.con
@@ -271,13 +256,6 @@ class PlotHandler(QThread):
         self.status = "standby"
         
         self._resetProgress()
-        
-        self.save_file_dir = os.path.abspath(dirname + "/../data/parametric_heating")
-        self.save_file_name = ""
-        
-        self.y_max = 1
-        self.y_min = 0
-        self.percentage = 100
         
     @checkError
     def _resetProgress(self):
@@ -309,9 +287,8 @@ class PlotHandler(QThread):
             self.y_max = np.ceil(np.max(self.y_data))
             self.y_min = np.floor(np.min(self.y_data))
             
-            self.percentage = int( (self.scan_idx+1)*100/ self.total_length )
-            
-            self.update_signal.emit()
+            self.plot.set_data(self.x_data, self.y_data)
+            self.update_signal.emit( int( (self.scan_idx+1)*100/ self.total_length ) )
             
         self.wakeupThread()
         
@@ -355,46 +332,32 @@ class PlotHandler(QThread):
                 self.cond.wait(self.mutex)
                 self.mutex.unlock()
                 
-            else: # This is not a good design, but I reused this as a save function.
+            else:
                 self.sequencer.occupant = ""
                 self.sequencer.sig_occupied.emit(False)
                 self.switchingDevice(False, -30)
                 self.saveData()
                 self.finished_signal.emit()
+                self.toStatusBar("Stopped heating.")
                 self.parent.BTN_start.setChecked(False)
                 self.status = "standby"
                 self.mutex.unlock()
-                
-    @checkError
-    def setSaveFileName(self, file_name=""):
-        self.save_file_name = file_name
 
 
     @checkError
     def saveData(self):
-        if self.save_file_name == "":
-            save_file_name = dirname + "/../data/parametric_heating/%s_parametric_heating" % datetime.datetime.now().strftime("%y%m%d_%H%M%S")
-        else:
-            save_file_name = self.save_file_name
+        save_file_name = dirname + "/../data/parametric_heating/%s_parametric_heating" % datetime.datetime.now().strftime("%y%m%d_%H%M%S")
         
         detail_string = self._makeDetails()
         df = pd.DataFrame({"frequency[MHz]": self.x_data,
                            "Photon counts": self.y_data})
         
+        with open (save_file_name + ".csv", "w") as fp:
+            fp.write(detail_string)
+        df.to_csv(save_file_name + ".csv", header=True, index=False, mode="a")
         
-        try:
-            with open (save_file_name + ".csv", "w") as fp:
-                fp.write(detail_string)
-            df.to_csv(save_file_name + ".csv", header=True, index=False, mode="a")
-            
-            window_qpixmap = self.parent.grab()
-            window_qpixmap.save(save_file_name + ".png", "PNG")
-            
-            self.setSaveFileName() # reset the save file name.
-            msg = "Saved the data file.(%s)" % save_file_name
-        except Exception as ee:
-            msg = "An error occured while saving the data.(%s)" % ee
-        self.toStatusBar(msg)
+        window_qpixmap = self.parent.grab()
+        window_qpixmap.save(save_file_name + ".png", "PNG")
         
         
     def _makeDetails(self):

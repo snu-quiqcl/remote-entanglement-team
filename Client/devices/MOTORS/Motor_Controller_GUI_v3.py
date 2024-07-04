@@ -9,22 +9,22 @@ The GUI v3 supports pyqtGraph
 import os
 from PyQt5 import uic, QtWidgets
 from PyQt5.QtCore import QObject, Qt
-from PyQt5.QtWidgets import QLabel, QLineEdit, QCheckBox, QInputDialog
+from PyQt5.QtWidgets import QLabel, QLineEdit, QCheckBox
 
 
 filename = os.path.abspath(__file__)
 dirname = os.path.dirname(filename)
-uifile = dirname + '/motor_status_ui_v3.ui'
+uifile = dirname + '/motor_status_ui_v2.ui'
 
 Ui_Form, _ = uic.loadUiType(uifile)
 
 
-class MotorController_GUI(QtWidgets.QMainWindow, Ui_Form):
+class MotorController_GUI(QtWidgets.QWidget, Ui_Form):
     
     _gui_initialized = False
     
     def __init__(self, controller=None):
-        QtWidgets.QMainWindow.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         
         self.setupUi(self)
         self.checkBox.setVisible(False)
@@ -109,34 +109,6 @@ class MotorController_GUI(QtWidgets.QMainWindow, Ui_Form):
                 motor_handle.QcheckBox.setChecked(False)
         self.parent.closeDevice(motor_list)
         
-    def pressedAddMotor(self):
-        nickname, nickname_returned = QInputDialog.getText(self, "Motor adder (1/3)", "Enter the motor's nickname:")
-        if nickname_returned:
-        
-            motor_type, type_returned = QInputDialog.getInt(self, "Motor adder (2/3)", "Enter the motor's type (0: KDC101, 1: Dummy, 2: remote):", value=0, min=0, max=2)
-    
-            if type_returned:
-                if motor_type in [0, 1]:
-                    serial_number, serial_returned = QInputDialog.getText(self, "Motor adder (3/3)", "Enter the serial number:")
-                    if serial_returned:
-                        self.parent.addMotor(serial_number, "Dummy" if motor_type else "KDC101", nickname)
-                        self.addMotor(nickname, serial_number, self.parent._motors[nickname])
-                        
-                        self.toStatusBar("A motor (%s) has beeen added." % nickname)
-                        return
-                    
-                else: # remote motor
-                    owner_nick, owner_returned = QInputDialog.getText(self, "Motor adder (3/3)", "Enter the owner's nickname:")
-                    if owner_returned:
-                        self.parent.addMotor(owner_nick, "remote", nickname, True)
-                        self.addMotor("%s:%s" % (owner_nick, nickname), "remote", self.parent._motors["%s:%s" % (owner_nick, nickname)])
-                        
-                        self.toStatusBar("A remote motor (%s:%s) has beeen added." % (owner_nick, nickname))
-                        return
-                        
-        self.toStatusBar("Adding a motor has been aborted.")
-                    
-                
     def changeItem(self, row_idx, col_idx, string):
         if row_idx > len(self.table_dict)-1 or col_idx > 3:
             raise ValueError ("Unexpected row id")
@@ -151,9 +123,6 @@ class MotorController_GUI(QtWidgets.QMainWindow, Ui_Form):
     def updatePosition(self, position_dict):
         for motor_nick, motor_position in position_dict.items():
             self.motor_dict[motor_nick].changedPosition(motor_position)
-            
-    def toStatusBar(self, msg, duration=8000):
-        self.statusbar.showMessage(msg, duration)
     
 class IndividualMotorGUI(QObject):
     

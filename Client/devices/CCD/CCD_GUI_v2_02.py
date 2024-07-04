@@ -28,7 +28,7 @@ from PyQt5.QtCore import QThread, QTimer, QRectF
 
 import pyqtgraph as pg
 
-# from Libs.CCD_oven_v0_04 import Oven_controller
+from Libs.CCD_oven_v0_04 import Oven_controller
 from CCD_UI_Base_Abstract import CCD_UI_base
 
 
@@ -64,7 +64,7 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
         #
         self._initUi()
         
-        # self.oc = Oven_controller(self)
+        self.oc = Oven_controller(self)
         self.cam.image_thread._img_recv_signal.connect(self._countPlot)
         
         self._img_cnt = 0
@@ -380,9 +380,8 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
 
             x = int(mouse_point.x())
             y = int(mouse_point.y())
-            if x >= 0 and x <= self._width:
-                if y >= 0 and y <= self._height:
-                    QtWidgets.QToolTip.showText(QtGui.QCursor().pos(), "x: {}\ny: {}\ncount: {}".format(x, y, self._plot_im[y][x]))
+            
+            QtWidgets.QToolTip.showText(QtGui.QCursor().pos(), "x: {}\ny: {}\ncount: {}".format(x, y, self._plot_im[y][x]))
 
     def ChangeExposureTime(self):
         exp_time = float(self.STATUS_exp_time.text())

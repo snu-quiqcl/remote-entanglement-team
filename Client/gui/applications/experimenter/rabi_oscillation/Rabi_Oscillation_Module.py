@@ -27,7 +27,7 @@ from .Connection_widget import CustomDevice
 
 
 
-ph_ui_file = dirname + "/ui/rabi_oscillation.ui"
+ph_ui_file = dirname + "/ui/parametric_heating.ui"
 ph_ui, _ = uic.loadUiType(ph_ui_file)
 
 def vpp_to_dBm(vpp):

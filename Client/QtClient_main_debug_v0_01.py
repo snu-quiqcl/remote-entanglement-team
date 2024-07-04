@@ -40,7 +40,6 @@ class ClientMain(QObject):
         self.socket._message_signal.connect(self.receivedMessage)
         self._msg_queue = Queue()
 
-
         self._setupDevices()
         if gui:
             sys.path.append(dirname + '/gui')

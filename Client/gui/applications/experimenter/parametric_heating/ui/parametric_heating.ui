@@ -215,7 +215,7 @@
      <item>
       <widget class="QCheckBox" name="CBOX_custom">
        <property name="enabled">
-        <bool>true</bool>
+        <bool>false</bool>
        </property>
        <property name="text">
         <string>Custom Device</string>
@@ -224,7 +224,7 @@
         <bool>true</bool>
        </property>
        <property name="checked">
-        <bool>false</bool>
+        <bool>true</bool>
        </property>
       </widget>
      </item>
@@ -245,20 +245,7 @@
        <property name="title">
         <string>Device Settings</string>
        </property>
-       <layout class="QHBoxLayout" name="horizontalLayout_14">
-        <property name="leftMargin">
-         <number>0</number>
-        </property>
-        <property name="topMargin">
-         <number>0</number>
-        </property>
-        <property name="rightMargin">
-         <number>0</number>
-        </property>
-        <property name="bottomMargin">
-         <number>4</number>
-        </property>
-       </layout>
+       <layout class="QHBoxLayout" name="horizontalLayout_14"/>
       </widget>
      </item>
      <item>
@@ -506,58 +493,6 @@ Number</string>
       </spacer>
      </item>
      <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_15">
-       <item>
-        <widget class="QPushButton" name="BTN_load">
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>40</height>
-          </size>
-         </property>
-         <property name="font">
-          <font>
-           <family>Arial Black</family>
-           <pointsize>10</pointsize>
-           <weight>75</weight>
-           <bold>true</bold>
-          </font>
-         </property>
-         <property name="text">
-          <string>Load</string>
-         </property>
-         <property name="checkable">
-          <bool>false</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="BTN_save">
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>40</height>
-          </size>
-         </property>
-         <property name="font">
-          <font>
-           <family>Arial Black</family>
-           <pointsize>10</pointsize>
-           <weight>75</weight>
-           <bold>true</bold>
-          </font>
-         </property>
-         <property name="text">
-          <string>Save</string>
-         </property>
-         <property name="checkable">
-          <bool>false</bool>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
       <widget class="QCheckBox" name="CBOX_precise">
        <property name="text">
         <string>I want precise result</string>
@@ -695,44 +630,10 @@ Number</string>
     </hint>
    </hints>
   </connection>
-  <connection>
-   <sender>BTN_save</sender>
-   <signal>clicked()</signal>
-   <receiver>Form</receiver>
-   <slot>pressedSaveButton()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>848</x>
-     <y>480</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>1318</x>
-     <y>491</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>BTN_load</sender>
-   <signal>clicked()</signal>
-   <receiver>Form</receiver>
-   <slot>pressedLoadButton()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>756</x>
-     <y>489</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>1571</x>
-     <y>336</y>
-    </hint>
-   </hints>
-  </connection>
  </connections>
  <slots>
   <slot>changeConnectionDevice()</slot>
   <slot>changedYLimit()</slot>
   <slot>pressedStartButton()</slot>
-  <slot>pressedSaveButton()</slot>
-  <slot>pressedLoadButton()</slot>
  </slots>
 </ui>

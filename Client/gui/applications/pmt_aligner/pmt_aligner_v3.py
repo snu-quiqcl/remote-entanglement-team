@@ -183,7 +183,7 @@ class PMTAlginerGUI(QtWidgets.QMainWindow, Ui_Form, pmt_aligner_theme_base):
                 
     def returnedDetector(self):
         self.detector = self.LBL_detector.text()
-        self.toStatusBar("The detector has been set to %s." % self.detector)
+        self.toStatusBar("A detector has been set to %s." % self.detector)
         
 class MotorController(QObject):
     

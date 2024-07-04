@@ -134,8 +134,6 @@ class CCD_controller(CCD_controller_Base):
     @buffer_size.setter
     def buffer_size(self, size:int):
         size = int(size)
-        if size < 1:
-            size = 50
         self._buffer_size = size
         
     @property
@@ -196,7 +194,8 @@ class CCD_controller(CCD_controller_Base):
                     if not self._store_full_image:
                         data_arr = processed_data
             # print('list_len:{} / buffer size: {}'.format(len(self._buffer_list), self._buffer_size))
-            if len(self._buffer_list) > self._buffer_size:
+            if not (len(self._buffer_list) < self._buffer_size):
+                # print('big')
                 while (len(self._buffer_list) >= self._buffer_size):
                     self._buffer_list.pop(0)
                     # print('popped')
