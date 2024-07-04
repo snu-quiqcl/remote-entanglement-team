@@ -1,0 +1,3 @@
+2024-02-15 11:03:46,565 - Server - INFO - Session opened.
+2024-02-15 11:04:00,796 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 56121)
+2024-02-15 11:29:36,805 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 56942)

@@ -1,0 +1,107 @@
+2021-09-30 08:40:39,498 - DeviceHandler - ERROR - An error ['pop from empty list'] occured while handling ['doWorks'].
+2021-09-30 09:23:15,044 - DeviceHandler - ERROR - An error ['pop from empty list'] occured while handling ['doWorks'].
+2021-09-30 09:58:13,811 - DeviceHandler - CRITICAL - Unknown work type(A) has been detected.
+2021-09-30 09:59:22,473 - DeviceHandler - CRITICAL - Unknown work type(A) has been detected.
+2021-09-30 10:01:17,676 - DeviceHandler - ERROR - An error [''list' object has no attribute 'sendMessage''] occured while handling ['doWorks'].
+2021-09-30 10:02:14,517 - DeviceHandler - CRITICAL - Unknown work type(A) has been detected.
+2021-09-30 10:03:18,807 - DeviceHandler - CRITICAL - yay
+2021-09-30 10:05:47,950 - DeviceHandler - INFO - wow
+2021-09-30 10:05:51,040 - DeviceHandler - INFO - wow
+2021-09-30 10:12:48,691 - DeviceHandler.dac - CRITICAL - Unknown work type(A) has been detected.
+2021-09-30 10:14:16,432 - DeviceHandler.DAC - CRITICAL - Unknown work type ("A") has been detected.
+2021-09-30 10:19:18,530 - Server - INFO - Session Opened.
+2021-09-30 10:19:24,361 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 14658)
+2021-09-30 10:41:12,638 - Server - INFO - Session opened.
+2021-09-30 10:41:17,733 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 2425)
+2021-09-30 10:41:58,021 - Server.DAC - CRITICAL - Unknown work type ("A") has been detected.
+2021-09-30 12:41:38,560 - Server - INFO - Session opened.
+2021-09-30 12:41:42,467 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 2903)
+2021-09-30 12:41:46,997 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 2908)
+2021-09-30 12:42:28,206 - Server - INFO - Session opened.
+2021-09-30 12:42:34,876 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 3187)
+2021-09-30 12:43:54,401 - Server - INFO - Session opened.
+2021-09-30 12:44:01,200 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 1344)
+2021-09-30 12:45:15,812 - Server - INFO - Session opened.
+2021-09-30 12:45:19,494 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 7341)
+2021-09-30 12:45:22,887 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 7346)
+2021-09-30 12:46:07,148 - Server - INFO - Session opened.
+2021-09-30 12:46:12,588 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 13746)
+2021-09-30 12:46:50,622 - Server - INFO - Session opened.
+2021-09-30 12:46:56,311 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 14007)
+2021-09-30 12:47:45,814 - Server - INFO - Session opened.
+2021-09-30 12:47:50,596 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 14304)
+2021-09-30 12:48:42,027 - Server - INFO - Session opened.
+2021-09-30 12:48:47,226 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 14597)
+2021-09-30 13:00:58,193 - Server - INFO - Session opened.
+2021-09-30 13:01:43,968 - Server - INFO - Session opened.
+2021-09-30 13:01:49,033 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 3828)
+2021-09-30 13:02:52,215 - Server - INFO - Session opened.
+2021-09-30 13:03:06,710 - Server - INFO - Session opened.
+2021-09-30 13:03:06,710 - Server - INFO - Session opened.
+2021-09-30 13:03:09,049 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 4137)
+2021-09-30 13:03:09,049 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 4137)
+2021-09-30 13:05:39,589 - Server - INFO - Session opened.
+2021-09-30 13:05:44,499 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 1131)
+2021-09-30 13:08:42,470 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 13505)
+2021-09-30 13:09:58,025 - Server - INFO - Session opened.
+2021-09-30 13:10:02,356 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11961)
+2021-09-30 13:10:07,141 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11966)
+2021-09-30 13:11:59,475 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 7189)
+2021-09-30 13:15:07,851 - Server - INFO - Session opened.
+2021-09-30 13:15:12,829 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 14778)
+2021-09-30 13:28:45,094 - Server - INFO - Session opened.
+2021-09-30 13:28:49,686 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 14906)
+2021-09-30 13:28:54,165 - Server.DAC - ERROR - An error [''DummyDacController' object has no attribute 'isRunning''] occured while handling ['toWorkList'].
+2021-09-30 13:32:27,388 - Server - INFO - Session opened.
+2021-09-30 13:32:32,819 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 13270)
+2021-09-30 13:32:37,483 - Server.DAC - ERROR - An error [''DummyDacController' object has no attribute 'isRunning''] occured while handling ['toWorkList'].
+2021-09-30 13:33:34,572 - Server - INFO - Session opened.
+2021-09-30 13:33:38,980 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 14929)
+2021-09-30 13:33:43,980 - Server.DAC - ERROR - An error [''DummyDacController' object has no attribute 'isRunning''] occured while handling ['toWorkList'].
+2021-09-30 13:35:49,673 - Server - INFO - Session opened.
+2021-09-30 13:35:54,010 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 14924)
+2021-09-30 13:35:57,641 - Server.DAC - ERROR - An error [''DummyDacController' object has no attribute 'isRunning''] occured while handling ['toWorkList'].
+2021-09-30 13:36:57,705 - Server - INFO - Session opened.
+2021-09-30 13:37:01,496 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 10680)
+2021-09-30 13:37:04,237 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 10693)
+2021-09-30 13:37:08,612 - Server.DAC - ERROR - An error [''DummyDacController' object has no attribute 'isRunning''] occured while handling ['toWorkList'].
+2021-09-30 13:39:42,452 - Server - INFO - Session opened.
+2021-09-30 13:40:21,765 - Server - INFO - Session opened.
+2021-09-30 13:43:04,767 - Server - INFO - Session opened.
+2021-09-30 13:43:08,997 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 5963)
+2021-09-30 13:44:29,545 - Server.DAC - ERROR - An error [''DummyDacController' object has no attribute 'isRunning''] occured while handling ['toWorkList'].
+2021-09-30 13:46:13,397 - Server - INFO - Session opened.
+2021-09-30 13:46:17,765 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 8166)
+2021-09-30 13:47:38,677 - Server - INFO - Session opened.
+2021-09-30 13:47:43,265 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 8476)
+2021-09-30 13:50:52,644 - Server - INFO - Session opened.
+2021-09-30 13:51:22,415 - Server - INFO - Session opened.
+2021-09-30 13:51:28,621 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 10483)
+2021-09-30 13:52:18,634 - Server - INFO - Session opened.
+2021-09-30 13:52:21,386 - Server - INFO - Session opened.
+2021-09-30 13:52:21,386 - Server - INFO - Session opened.
+2021-09-30 13:52:23,672 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11054)
+2021-09-30 13:52:23,672 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11054)
+2021-09-30 13:52:50,344 - Server - INFO - Session opened.
+2021-09-30 13:52:55,020 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11363)
+2021-09-30 13:55:03,144 - Server - INFO - Session opened.
+2021-09-30 13:55:04,851 - Server - INFO - Session opened.
+2021-09-30 13:55:04,851 - Server - INFO - Session opened.
+2021-09-30 13:55:09,191 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11533)
+2021-09-30 13:55:09,191 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11533)
+2021-09-30 13:55:59,167 - Server - INFO - Session opened.
+2021-09-30 13:56:00,744 - Server - INFO - Session opened.
+2021-09-30 13:56:00,744 - Server - INFO - Session opened.
+2021-09-30 13:56:10,201 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11848)
+2021-09-30 13:56:10,201 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11848)
+2021-09-30 13:56:32,233 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11983)
+2021-09-30 13:56:32,233 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11983)
+2021-09-30 13:58:46,965 - Server - INFO - Session opened.
+2021-09-30 13:58:48,748 - Server - INFO - Session opened.
+2021-09-30 13:58:48,748 - Server - INFO - Session opened.
+2021-09-30 13:58:52,963 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 10944)
+2021-09-30 13:58:52,963 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 10944)
+2021-09-30 13:58:59,619 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 10951)
+2021-09-30 13:58:59,619 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 10951)
+2021-09-30 14:00:04,534 - Server - INFO - Session opened.
+2021-09-30 14:00:09,511 - Server.RequestHandler - INFO - A new connection from (127.0.0.1, 11378)
