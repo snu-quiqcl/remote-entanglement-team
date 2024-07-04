@@ -3,16 +3,18 @@
 Created on Sat Aug 21 23:22:02 2021
 
 Author: JHJeong32
+
+Panels are designed as gui-oriented since I did not plan to reuse the code.
 """
 import os
 version = "1.1"
 
 filename = os.path.abspath(__file__)
 dirname = os.path.dirname(filename)
+seq_dirname = os.path.abspath(dirname + "/../../libraries/sequencer_files/")
 
 # PyQt libraries
 from PyQt5 import uic, QtWidgets
-from PyQt5.QtWidgets import QFileDialog
 
 from main_panel_theme import main_panel_theme_base
 main_ui_file = dirname + "/main_panel.ui"
@@ -146,13 +148,14 @@ class MainPanel(QtWidgets.QMainWindow, main_ui, main_panel_theme_base):
         try:
             self.sequencer.openHardwareDefinitionFile()
         except Exception as ee:
-            self.toStatusBar("An error while opening the hardware definition file. (%s)" % ee)
+            self.toStatusBar("An error while opening the hardware definition file.(%s)" % ee)
         
             
     def buttonConfigPressed(self):
-        config_file = QFileDialog.getOpenFileName(self, 'Open .ini file.',
-                                                  os.path.basename(self.TXT_config.text()), 'ini files(*.ini)')[0]
-        self.loadConfig(config_file)
+        try:
+            os.startfile(self.TXT_config.text())
+        except Exception as ee:
+            self.toStatusBar("An error while opening the config file.(%s)" % ee)
         
        
     def buttonSwitchPressed(self):
@@ -170,31 +173,36 @@ class MainPanel(QtWidgets.QMainWindow, main_ui, main_panel_theme_base):
     def _runButtonSequencer(self, button_dict):
         self.user_run_flag = True
 
-        replace_string_list = []
-        for switch_out, switch_flag in button_dict.items():
-            replace_string = "(hd.%s, %d)" % (switch_out, switch_flag)
-            replace_string_list.append(replace_string)
-        replace_string = ",".join(replace_string_list)
+        output_port_list = []
+        slow_port_list = []
         
-        file_string = self._getReplacedFileString(replace_string)
+        for switch_out, switch_flag in button_dict.items():
+            switch_port = switch_out[:-4]
+            pin = self.sequencer.hd.output_mapping[switch_port]
+            
+            if ("jc_" in pin) or ("jd_" in pin): # slow_output_port
+                slow_port_list.append("(hd.%s, %d)" % (switch_out, switch_flag))
+            else:
+                output_port_list.append("(hd.%s, %d)" % (switch_out, switch_flag))
+        
+        file_string = self._getReplacedFileString(slow_port_list, output_port_list)
         self.sequencer.spontaneous = True
         self.sequencer._executeFileString(file_string)
         self.sequencer.runSequencerFile()
         self.sequencer.spontaneous = False
-            
-    def _getReplacedFileString(self, replace_string):
-        file_string = ''
-        seq_file = dirname + '/sequencer/' + 'Switch_sequencer_base.py'
-        with open (seq_file) as f:
-            while True:
-                line = f.readline()
-                if not line:
-                    break
-                if " as hd\n" in line:
-                    line = "import %s as hd\n" % self.sequencer.hw_def
-                if "Will_be_replaced_line" in line:
-                    line = "s.set_output_port(hd.external_control_port, [%s])" % replace_string
-                file_string += line
+        
+        
+    def _getReplacedFileString(self, slow_port_list, output_port_list):
+        seq_file = seq_dirname + "/Switch_sequencer_base.py"
+        pre_defined_string = self.sequencer.replaceParameters(seq_file)
+        
+        fast_output_string = "s.set_output_port(hd.external_control_port, [%s])" % ",".join(output_port_list) if len(output_port_list) else ""
+        slow_output_string = "s.set_output_port(hd.external_control_port, [%s])" % ",".join(slow_port_list) if len(slow_port_list) else ""
+
+        replace_string = fast_output_string + "\n" + slow_output_string
+                
+        file_string = pre_defined_string.replace("Will_be_replaced_line", replace_string)
+        
         return file_string
                 
     #%%
@@ -207,8 +215,8 @@ class MainPanel(QtWidgets.QMainWindow, main_ui, main_panel_theme_base):
             self.toStatusBar("Couldn't read the config file.")
             return
         
-        self.TXT_ip.setText(cp.get("server", "ip"))
-        self.TXT_port.setText(cp.get("server", "port"))
+        self.TXT_ip.setText(cp.get("win_server", "ip"))
+        self.TXT_port.setText(cp.get("win_server", "port"))
         self.TXT_config.setText(config_file)
         self.toStatusBar("Loaded a config file.")
         
@@ -225,7 +233,10 @@ class MainPanel(QtWidgets.QMainWindow, main_ui, main_panel_theme_base):
                     self.switch_button_list[idx].setText(key + "_out")
 
                     if "description" in FPGA.hd.__dict__.keys():
-                        desc_text += FPGA.hd.description[key] + "\n"
+                        if key in FPGA.hd.description.keys():
+                            desc_text += FPGA.hd.description[key] + "\n"
+                        else:
+                            desc_text += ""
                     desc_text += "(%s)" % FPGA.hd.output_mapping[key]
 
                 else:
@@ -387,7 +398,6 @@ class MainPanel(QtWidgets.QMainWindow, main_ui, main_panel_theme_base):
         else:
             self.toStatusBar("You must connect to the DAC first.")
     
-    
     def changedDACVoltage(self):
         prev_voltage_list = self.device_dict["dac"]._voltage_list
         channel_list = []
@@ -423,7 +433,6 @@ class MainPanel(QtWidgets.QMainWindow, main_ui, main_panel_theme_base):
             
         self.user_update = True
 
-            
     def changeDDSconn(self, flag):
         self.user_update = False
         self.BTN_dds_connect.setChecked(flag)

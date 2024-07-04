@@ -12,6 +12,9 @@ dirname = os.path.dirname(filename)
 sequencer_program_list = [os.path.basename(x) for x in glob.glob(dirname + "/SequencerProgram_*.py")]
 sequencer_program_list.sort()
 print("Found a sequencer program file:", sequencer_program_list[-1])
+sequencer_utility_list = [os.path.basename(x) for x in glob.glob(dirname + "/SequencerUtility_*.py")]
+sequencer_utility_list.sort()
+print("Found a sequencer utility file:", sequencer_utility_list[-1])
 
 if sequencer_program_list[-1][-5:-3] == "08":
     from SequencerProgram_v1_08 import SequencerProgram, reg
@@ -48,7 +51,7 @@ class SequencerRunner(QObject):
     device_sweep_flag = False 
     
     
-    def __init__(self, ser_num=None, hw_def=None, parent=None):
+    def __init__(self, ser_num=None, hw_def=None, parent=None, verbose=False):
         super().__init__()
         self.parent = parent
         self.ser_num = ser_num
@@ -62,6 +65,7 @@ class SequencerRunner(QObject):
         self.runner.finished.connect(self._finishedRunner)
         self.default_hw_def_dir = dirname
         
+        
         self.start_time = None
         self.end_time = None
         
@@ -70,6 +74,9 @@ class SequencerRunner(QObject):
         
         self.occupant = ""
         self.verbose = False
+        
+    def setVerbose(self, flag):
+        self.verbose = flag
         
     def openDevice(self, com_port=None):
         if com_port == None:
@@ -115,6 +122,7 @@ class SequencerRunner(QObject):
             sys.path.append(dirname)
             exec("import %s as hd" % hw_def)
             exec("self.hd = hd")
+            
         except Exception as e:
              self.toStatusBar("Failed to open the hardware definition (%s)." % e)
              
@@ -184,10 +192,14 @@ class SequencerRunner(QObject):
                 line = f.readline()
                 if not line:
                     break
+                if "if __name__" in line: # This magic command for running the script is usually at the end of the script file. Thus, it stops reading.
+                    break
                 if " as hd\n" in line:
-                    print ("replaced from %s" % line)
                     line = "import %s as hd\n" % self.hw_def
-                    print("to %s" % line)
+                if "from SequencerProgram" in line:
+                    line = "from %s import SequencerProgram, reg\n" % sequencer_program_list[-1][:-3]
+                if "import SequencerUtility" in line:
+                    line = "import %s as su\n" % sequencer_utility_list[-1][:-3]
                 if line_idx in line_idx_list:
                     line = '%s=%.0f\n' % (replace_dict[line_idx]["param"], replace_dict[line_idx]["value"])
                 file_string += line
@@ -196,7 +208,6 @@ class SequencerRunner(QObject):
         if len(replace_registers):
             for old_str, new_str in replace_registers.items():
                 file_string = file_string.replace(old_str, new_str)
-                
         return file_string
     
     
@@ -304,6 +315,7 @@ class Runner(QThread):
                 print(self.data)
                 
             controller.data.append(self.data)
+            
         except Exception as ee:
             print("An error occured while running the sequencer file (%s)" % ee)
         self.status = "standby"

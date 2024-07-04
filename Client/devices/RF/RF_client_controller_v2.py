@@ -198,7 +198,6 @@ class RF_ClientInterface(QThread):
             data_list = work[2] # list of data
             
             if work_type == "D":
-                
                 if cmd == "HELO":
                     """
                     Successfully received a response from the server
@@ -216,6 +215,9 @@ class RF_ClientInterface(QThread):
                         self.buildRF_Device(dev_nick, dev_type)
                         self.RF_dict[dev_nick].isConnected = dev_conn
                         
+                elif cmd == "DCN":
+                    self._gui_update_signal.emit("RF", "DCN", [])
+                    print("disconnected")
                     
                 elif cmd in self.RF_dict.keys():
                     

@@ -12,8 +12,9 @@ from PyQt5.QtGui     import QColor
 from PyQt5.QtCore    import pyqtSignal
 
 import numpy as np
+import pandas as pd
 import pyqtgraph as pg
-
+from tkinter import filedialog
 
 filename = os.path.abspath(__file__)
 dirname = os.path.dirname(filename)
@@ -68,7 +69,9 @@ class CountViewer(QtWidgets.QWidget, Ui_Form):
         
         self.PMT_counts_list = []
         self.PMT_number_list = []
+        self.PMT_time_list = []
         self.PMT_num = 0
+        self.PMT_time = 0
                 
         self.PMT_vmin = 0
         self.PMT_vmax = 100
@@ -107,7 +110,7 @@ class CountViewer(QtWidgets.QWidget, Ui_Form):
             
     def updatePlot(self):      
         if (not self.isHidden() and not self.isMinimized()):
-            self.plot.setData(self.PMT_number_list, self.PMT_counts_list)
+            self.plot.setData(self.PMT_number_list[-50:], self.PMT_counts_list[-50:])
             
             if self.radio_manual.isChecked():
                 self.ax.setYRange(self.PMT_vmin, self.PMT_vmax)
@@ -167,6 +170,23 @@ class CountViewer(QtWidgets.QWidget, Ui_Form):
             self.toStatusBar("The max PMT count should be a float. (%s)" % e)
     
     
+    def savecountdata(self):
+        
+        self.PMT_time = 0
+    
+        countlist = self.PMT_counts_list   
+        timelist = list(np.array(self.PMT_time_list) - self.PMT_time_list[0])
+        self.PMT_counts_list = countlist
+        tempdir = 'C://Users/QC109/Desktop/'
+        savedict = {'time (ms)': timelist, 'counts': countlist}
+        df = pd.DataFrame.from_dict(savedict)
+        filename = filedialog.asksaveasfilename(initialdir=tempdir, title="Select file",
+                                          filetypes=(("Excel files", "*.xlsx"), 
+                                          ("all files", "*.*")))
+        if 'xlsx' not in filename:
+            filename = filename + '.xlsx'
+        df.to_excel(filename, index=False)
+        
     #%% ?
     def _setEnableObjects(self, flag):
         for obj in self.disable_list:
@@ -199,7 +219,8 @@ class CountViewer(QtWidgets.QWidget, Ui_Form):
         
         frame.setLayout(layout)
         
-        plot = ax.plot(self.PMT_number_list, self.PMT_counts_list, pen=pg.mkPen(self.line_color, width=self.line_width))
+        plot = ax.plot(self.PMT_number_list[-50:], self.PMT_counts_list[-50:], 
+                       pen=pg.mkPen(self.line_color, width=self.line_width))
         
         ax.setLabel("bottom", "Exposure indices", **styles)
         ax.setLabel("left", "PMT counts", **styles)
@@ -230,12 +251,15 @@ class CountViewer(QtWidgets.QWidget, Ui_Form):
                     pmt_count = raw_pmt_count[0][2]
                     
                 self.PMT_num += 1
-                while len(self.PMT_counts_list) > 50:
+                self.PMT_time += self.exposure_time
+                while len(self.PMT_counts_list) > 500:
                     self.PMT_counts_list.pop(0)
                     self.PMT_number_list.pop(0)
+                    self.PMT_time_list.pop(0)
                     
                 self.PMT_counts_list.append(pmt_count)
                 self.PMT_number_list.append(self.PMT_num)
+                self.PMT_time_list.append(self.PMT_time)
                 
                 self.TXT_pmt_result.setText("%.3f" % pmt_count)
                 self.updatePlot()

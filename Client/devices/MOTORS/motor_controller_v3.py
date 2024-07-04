@@ -46,7 +46,9 @@ class MotorController(QObject):
                     msg = ["D", "%s:MOTORS" % self.user_name, "MOVED", ["%s:%s" % (self.user_name, nick), position]]
                     self.toSocket(msg)
                     
-                        
+                else:
+                    self._detectedError("Un unknown function has been detected.(%s)" % func.__name__)
+                    
             return func(self, *args)
                 
         return wrapper
@@ -111,6 +113,12 @@ class MotorController(QObject):
                 
                 
         return motor_dict
+    
+    def addMotor(self, serno_or_owner, dev_type, nickname, remote_flag=0):
+        if remote_flag:
+            self._motors["%s:%s" % (serno_or_owner, nickname)] = self._addRemoteMotor(serno_or_owner, dev_type, nickname)
+        else:
+            self._motors[nickname] = self._addMotor(serno_or_owner, dev_type, nickname)
     
     def _addMotor(self, serno, dev_type, nickname):        
         motor = MotorHandler(self, serno, dev_type=dev_type, nick=nickname)
@@ -207,8 +215,10 @@ class MotorController(QObject):
         
     @remote_control_wrapper
     def _detectedError(self, msg):
-        print(msg)
-            
+        if self.gui:
+            self.gui.toStatusBar(msg)
+        else:
+            print(msg)
         
     def toWorkList(self, cmd):
         self.queue.put(cmd)
@@ -217,6 +227,7 @@ class MotorController(QObject):
             
     def run(self):
         while self.queue.qsize():
+            print("queue size", self.queue.qsize())
             work = self.queue.get()
             self._status  = "running"
             # decompose the job

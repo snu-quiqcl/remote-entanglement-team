@@ -413,17 +413,26 @@
       </spacer>
      </item>
      <item>
-      <spacer name="verticalSpacer_4">
-       <property name="orientation">
-        <enum>Qt::Vertical</enum>
+      <widget class="QPushButton" name="Savedata">
+       <property name="enabled">
+        <bool>true</bool>
        </property>
-       <property name="sizeHint" stdset="0">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
         <size>
-         <width>20</width>
-         <height>40</height>
+         <width>0</width>
+         <height>23</height>
         </size>
        </property>
-      </spacer>
+       <property name="text">
+        <string>Save count data</string>
+       </property>
+      </widget>
      </item>
      <item>
       <spacer name="verticalSpacer_2">
@@ -616,6 +625,22 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>Savedata</sender>
+   <signal>clicked()</signal>
+   <receiver>Form</receiver>
+   <slot>savecountdata()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>653</x>
+     <y>337</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>813</x>
+     <y>399</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>pressedStartCounting()</slot>
@@ -624,5 +649,6 @@
   <slot>setPMTMax()</slot>
   <slot>setAverageNumber()</slot>
   <slot>setExposureTime()</slot>
+  <slot>savecountdata()</slot>
  </slots>
 </ui>

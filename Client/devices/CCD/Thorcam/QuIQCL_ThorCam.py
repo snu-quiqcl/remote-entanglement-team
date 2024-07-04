@@ -653,7 +653,8 @@ class QuIQCL_ThorCam(ThorCamBase):
             data = as_numpy_array(processed_data)
         else:
             pixel_fmt = 'gray16le'
-            data = as_numpy_array(frame.ImageData.ImageData_monoOrBGR)
+            data = as_numpy_array(frame.ImageData.GetType().GetProperty(
+                'ImageData_monoOrBGR').GetValue(frame.ImageData))
             
         return data, pixel_fmt, (w, h), count, queued_count, t
 

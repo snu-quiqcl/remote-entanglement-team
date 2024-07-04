@@ -1,6 +1,6 @@
 """
-Created on Nov 21, 2021
-@author: Jaeun Kim
+Created on Nov 21, 2023
+@author: Junho Jeong
 
 This script repeats PMT measurements. Each measurement writes a data entry to FIFO.
 The exposure time of each measurement is in the unit of 1us.

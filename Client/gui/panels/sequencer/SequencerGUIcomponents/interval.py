@@ -6,8 +6,24 @@ and outputs the sequencer method(self.to_python())
 """
 
 from PyQt5 import QtWidgets, QtGui, QtCore
-from SequencerProgram_v1_07 import SequencerProgram, reg
+import os, glob
+file_name = os.path.abspath(__file__)
+dir_name = os.path.dirname(file_name)
 
+seq_dir = os.path.abspath(dir_name + "/../../../sequencer/")
+import sys
+sys.path.append(seq_dir)
+sequencer_program_list = [os.path.basename(x) for x in glob.glob(seq_dir + "/SequencerProgram_*.py")]
+sequencer_program_list.sort()
+
+if sequencer_program_list[-1][-5:-3] == "08":
+    from SequencerProgram_v1_08 import SequencerProgram, reg
+    import SequencerUtility_v1_03 as su
+
+else:
+    from SequencerProgram_v1_07 import SequencerProgram, reg
+    import SequencerUtility_v1_01 as su
+    
 from .const import *
 from .utility import *
 
