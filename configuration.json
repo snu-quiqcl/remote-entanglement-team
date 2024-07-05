@@ -1,0 +1,25 @@
+{
+    "server" : {
+        "host" : "127.0.0.1",
+        "port_list" : [
+            1,
+            2,
+            3
+        ],
+        "path" : [
+            "C:/Jeonghyun/SNU_GIT/quiqcl-device"
+        ]
+    },
+    "device" : {
+        "ad9912_0" : {
+            "args" : {  
+                "name" : "ad9912"
+            },
+            "class" : "dummy_class",
+            "import" : "dummy",
+            "_notify_vars" : [
+                "frequency" , "amplitude"
+            ]
+        }
+    }
+}
