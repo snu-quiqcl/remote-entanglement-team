@@ -153,7 +153,7 @@ class CountViewer(QtWidgets.QWidget, Ui_Form):
     def _setSequencerFile(self):
         # CHECK FOR SYNTAX
         self.sequencer.loadSequencerFile(seq_file= seq_dirname + "/simple_exposure.py",
-                                         replace_dict={13:{"param": "EXPOSURE_TIME_IN_MS", "value": int(self.exposure_time*10)},
+                                         replace_dict={13:{"param": "EXPOSURE_TIME_IN_MS", "value": int(self.exposure_time)}, # No need to multiply 10 / The sequencer program at Client\gui\libraries\sequencer_files\simple_exposure.py multiplies 10
                                                        14:{"param": "NUM_AVERAGE", "value": self.avg_num}},
                                          replace_registers={"PMT": self.parent.detector})
         
