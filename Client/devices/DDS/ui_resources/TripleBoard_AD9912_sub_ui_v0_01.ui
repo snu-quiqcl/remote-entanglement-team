@@ -131,25 +131,6 @@
             </property>
            </widget>
           </item>
-          <item row="1" column="0">
-           <widget class="QDoubleSpinBox" name="Board1_DDS1_power_spinbox">
-            <property name="maximumSize">
-             <size>
-              <width>100</width>
-              <height>16777215</height>
-             </size>
-            </property>
-            <property name="decimals">
-             <number>0</number>
-            </property>
-            <property name="maximum">
-             <double>1000.000000000000000</double>
-            </property>
-            <property name="singleStep">
-             <double>1.000000000000000</double>
-            </property>
-           </widget>
-          </item>
           <item row="1" column="1">
            <widget class="QLineEdit" name="Board1_DDS1_power_step_size">
             <property name="minimumSize">
@@ -166,6 +147,25 @@
             </property>
             <property name="text">
              <string>1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QDoubleSpinBox" name="Board1_DDS1_power_spinbox">
+            <property name="maximumSize">
+             <size>
+              <width>100</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="decimals">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <double>1000.000000000000000</double>
+            </property>
+            <property name="singleStep">
+             <double>1.000000000000000</double>
             </property>
            </widget>
           </item>
@@ -693,7 +693,7 @@
   </connection>
   <connection>
    <sender>Board1_DDS1_freq_spinbox</sender>
-   <signal>valueChanged(double)</signal>
+   <signal>editingFinished()</signal>
    <receiver>Form</receiver>
    <slot>changeFreq()</slot>
    <hints>
@@ -709,7 +709,7 @@
   </connection>
   <connection>
    <sender>Board1_DDS2_freq_spinbox</sender>
-   <signal>valueChanged(double)</signal>
+   <signal>editingFinished()</signal>
    <receiver>Form</receiver>
    <slot>changeFreq()</slot>
    <hints>
@@ -724,24 +724,8 @@
    </hints>
   </connection>
   <connection>
-   <sender>Board1_DDS1_power_spinbox</sender>
-   <signal>valueChanged(double)</signal>
-   <receiver>Form</receiver>
-   <slot>changeCurr()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>94</x>
-     <y>199</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>716</x>
-     <y>159</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>Board1_DDS2_power_spinbox</sender>
-   <signal>valueChanged(double)</signal>
+   <signal>editingFinished()</signal>
    <receiver>Form</receiver>
    <slot>changeCurr()</slot>
    <hints>
@@ -757,7 +741,7 @@
   </connection>
   <connection>
    <sender>Board1_DDS1_phase_spinbox</sender>
-   <signal>valueChanged(double)</signal>
+   <signal>editingFinished()</signal>
    <receiver>Form</receiver>
    <slot>changePhase()</slot>
    <hints>
@@ -773,7 +757,7 @@
   </connection>
   <connection>
    <sender>Board1_DDS2_phase_spinbox</sender>
-   <signal>valueChanged(double)</signal>
+   <signal>editingFinished()</signal>
    <receiver>Form</receiver>
    <slot>changePhase()</slot>
    <hints>
@@ -784,6 +768,22 @@
     <hint type="destinationlabel">
      <x>606</x>
      <y>270</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>Board1_DDS1_power_spinbox</sender>
+   <signal>editingFinished()</signal>
+   <receiver>Form</receiver>
+   <slot>changeCurr()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>94</x>
+     <y>199</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>716</x>
+     <y>159</y>
     </hint>
    </hints>
   </connection>

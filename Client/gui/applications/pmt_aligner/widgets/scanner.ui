@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>923</width>
-    <height>662</height>
+    <width>1166</width>
+    <height>819</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -74,10 +74,7 @@
     </layout>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,4,3,0,0,0">
-     <property name="spacing">
-      <number>6</number>
-     </property>
+    <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1,0,1,1,0,0,0">
      <item>
       <widget class="QGroupBox" name="groupBox">
        <property name="maximumSize">
@@ -91,7 +88,7 @@
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_9">
         <item>
-         <layout class="QGridLayout" name="gridLayout_3" rowstretch="1,0,0">
+         <layout class="QGridLayout" name="gridLayout_3" rowstretch="0,0,0">
           <item row="1" column="0">
            <widget class="QLabel" name="label_2">
             <property name="frameShape">
@@ -346,9 +343,139 @@
         </size>
        </property>
        <property name="title">
+        <string>Through Focus Scan Settings</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_10">
+        <item>
+         <widget class="QCheckBox" name="CB_through_focus_scan">
+          <property name="text">
+           <string>Enable Through Focus Scan</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QGridLayout" name="gridLayout_4" rowstretch="0,0">
+          <item row="0" column="2">
+           <widget class="QLabel" name="label_19">
+            <property name="frameShape">
+             <enum>QFrame::Panel</enum>
+            </property>
+            <property name="text">
+             <string>Stop</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QDoubleSpinBox" name="GUI_z_start">
+            <property name="decimals">
+             <number>3</number>
+            </property>
+            <property name="maximum">
+             <double>12.000000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_21">
+            <property name="frameShape">
+             <enum>QFrame::Panel</enum>
+            </property>
+            <property name="text">
+             <string>mm</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="3">
+           <widget class="QLabel" name="label_18">
+            <property name="frameShape">
+             <enum>QFrame::Panel</enum>
+            </property>
+            <property name="text">
+             <string>Step</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLabel" name="label_20">
+            <property name="frameShape">
+             <enum>QFrame::Panel</enum>
+            </property>
+            <property name="text">
+             <string>Start</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QDoubleSpinBox" name="GUI_z_stop">
+            <property name="decimals">
+             <number>3</number>
+            </property>
+            <property name="maximum">
+             <double>12.000000000000000</double>
+            </property>
+            <property name="value">
+             <double>0.500000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="3">
+           <widget class="QDoubleSpinBox" name="GUI_z_step">
+            <property name="decimals">
+             <number>3</number>
+            </property>
+            <property name="maximum">
+             <double>12.000000000000000</double>
+            </property>
+            <property name="singleStep">
+             <double>0.100000000000000</double>
+            </property>
+            <property name="value">
+             <double>0.100000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label_16">
+            <property name="frameShape">
+             <enum>QFrame::Panel</enum>
+            </property>
+            <property name="text">
+             <string>Z</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="groupBox_3">
+       <property name="maximumSize">
+        <size>
+         <width>410</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="title">
         <string>Scan Progress</string>
        </property>
-       <layout class="QVBoxLayout" name="verticalLayout_8" stretch="6,1">
+       <layout class="QVBoxLayout" name="verticalLayout_8" stretch="0,0">
         <property name="spacing">
          <number>6</number>
         </property>
@@ -546,7 +673,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QGroupBox" name="groupBox_3">
+      <widget class="QGroupBox" name="groupBox_4">
        <property name="maximumSize">
         <size>
          <width>410</width>
@@ -734,8 +861,8 @@
    <slot>pressedScanStartButton()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>901</x>
-     <y>613</y>
+     <x>1272</x>
+     <y>1128</y>
     </hint>
     <hint type="destinationlabel">
      <x>911</x>
@@ -750,8 +877,8 @@
    <slot>pressedChangeSaveDir()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>670</x>
-     <y>387</y>
+     <x>1041</x>
+     <y>674</y>
     </hint>
     <hint type="destinationlabel">
      <x>911</x>
@@ -766,8 +893,8 @@
    <slot>pressedPauseScanning()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>901</x>
-     <y>577</y>
+     <x>1272</x>
+     <y>1092</y>
     </hint>
     <hint type="destinationlabel">
      <x>911</x>
@@ -782,8 +909,8 @@
    <slot>pressedScanVicinityButton()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>812</x>
-     <y>205</y>
+     <x>1205</x>
+     <y>278</y>
     </hint>
     <hint type="destinationlabel">
      <x>911</x>
@@ -798,8 +925,8 @@
    <slot>pressedApplyButton()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>891</x>
-     <y>531</y>
+     <x>1262</x>
+     <y>1046</y>
     </hint>
     <hint type="destinationlabel">
      <x>909</x>
@@ -814,8 +941,8 @@
    <slot>pressedGoToMax()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>901</x>
-     <y>649</y>
+     <x>1272</x>
+     <y>1164</y>
     </hint>
     <hint type="destinationlabel">
      <x>911</x>
@@ -830,8 +957,8 @@
    <slot>changedStepValue()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>890</x>
-     <y>72</y>
+     <x>1282</x>
+     <y>93</y>
     </hint>
     <hint type="destinationlabel">
      <x>911</x>
@@ -846,8 +973,8 @@
    <slot>changedStepValue()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>890</x>
-     <y>98</y>
+     <x>1282</x>
+     <y>119</y>
     </hint>
     <hint type="destinationlabel">
      <x>911</x>
@@ -862,8 +989,8 @@
    <slot>pressedLoadSaveFile()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>890</x>
-     <y>387</y>
+     <x>1261</x>
+     <y>674</y>
     </hint>
     <hint type="destinationlabel">
      <x>911</x>
@@ -878,12 +1005,44 @@
    <slot>pressedSaveButton()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>762</x>
-     <y>369</y>
+     <x>1151</x>
+     <y>674</y>
     </hint>
     <hint type="destinationlabel">
      <x>911</x>
      <y>410</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>GUI_z_step</sender>
+   <signal>valueChanged(double)</signal>
+   <receiver>Form</receiver>
+   <slot>changedStepValue()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>1282</x>
+     <y>401</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>687</x>
+     <y>587</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>CB_through_focus_scan</sender>
+   <signal>stateChanged(int)</signal>
+   <receiver>Form</receiver>
+   <slot>changedThroughFocusScanOption()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>1191</x>
+     <y>356</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>687</x>
+     <y>587</y>
     </hint>
    </hints>
   </connection>
@@ -899,5 +1058,6 @@
   <slot>pressedChangeSaveDir()</slot>
   <slot>pressedPauseScanning()</slot>
   <slot>pressedSaveButton()</slot>
+  <slot>changedThroughFocusScanOption()</slot>
  </slots>
 </ui>

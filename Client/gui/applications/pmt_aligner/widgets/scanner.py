@@ -15,6 +15,8 @@ import numpy as np
 import pickle
 import datetime
 import pyqtgraph as pg
+from copy import deepcopy
+import time
 
 filename = os.path.abspath(__file__)
 dirname = os.path.dirname(filename)
@@ -35,6 +37,7 @@ class ScannerGUI(QtWidgets.QWidget, Ui_Form):
         self.app_name = self.parent.app_name
 
         self.motors = {nick: motor_controller._motors[nick] for nick in motor_nicks if ("x" in nick or "y" in nick)}
+        self.motor_axial = {nick: motor_controller._motors[nick] for nick in motor_nicks if ("z" in nick)}
         self.sequencer = sequencer
         
         self._theme = theme
@@ -56,14 +59,22 @@ class ScannerGUI(QtWidgets.QWidget, Ui_Form):
 
 
     def saveData(self, save_file_name=""):
+        self._setDefaultFileName()
         if save_file_name == "":
             save_file_name = self.LE_save_file_dir.text() + "/" + self.LE_save_file_name.text()
         if save_file_name[-3:] == "pkl":
             save_file_name = save_file_name[:-4]
-            
+        
         save_dict = {"img": self.plot_im,
-                     "x_pos": self.scanner.x_scan_range,
-                     "y_pos": self.scanner.y_scan_range}
+                    "x_pos": self.scanner.x_scan_range,
+                    "y_pos": self.scanner.y_scan_range}
+        
+        # if len(self.scanner.z_scan_range) != len(self.scanner.save_dict.keys()):
+        #     last_idx = list(self.scanner.save_dict.keys())[-1]
+        #     save_dict = self.scanner.save_dict[last_idx]
+        # else:
+        #     save_dict = self.scanner.save_dict        
+        
         if os.path.isfile(save_file_name + ".pkl"):
             idx = 0
             while True:
@@ -73,7 +84,6 @@ class ScannerGUI(QtWidgets.QWidget, Ui_Form):
                     break
             save_file_name = save_file_name + "_%02d" % idx
             
-        
         with open (save_file_name + ".pkl", "wb") as fw:
             pickle.dump(save_dict, fw)
         
@@ -81,20 +91,27 @@ class ScannerGUI(QtWidgets.QWidget, Ui_Form):
             self.parent.grab().save(save_file_name + ".png")
         except Exception as ee:
             self.toStatusBar("An error while saving a screenshot. (%s)" % ee)
-        self._setDefaultFileName()
-        
+        # self._setDefaultFileName()
+                
     def loadData(self, data_file_name=""):
         try:
             with open (data_file_name, "rb") as fr:
                 loaded_data_dict = pickle.load(fr)
+            
+            if "img" in loaded_data_dict.keys():
                 img, x_scan_range, y_scan_range = loaded_data_dict["img"], loaded_data_dict["x_pos"], loaded_data_dict["y_pos"]
                 # self.plot_im = loaded_data_dict["img"]
                 # self.scanner.x_scan_range = loaded_data_dict["x_pos"]
                 # self.scanner.y_scan_range = loaded_data_dict["y_pos"]
+
+            else:
+                z_val = list(loaded_data_dict.keys())[-1]
+                img, x_scan_range, y_scan_range = loaded_data_dict[z_val]["img"], loaded_data_dict[z_val]["x_pos"], loaded_data_dict[z_val]["y_pos"]
+
             step_value = np.round(np.diff(x_scan_range)[0], 3)
             self.setSignificant_figure(step_value)
             self._temporaryUpdatePlot(img, x_scan_range, y_scan_range)
-            self.toStatusBar("Successfully loaded a data file. (%s)" % os.path.basename(data_file_name))
+            self.toStatusBar("Successfully loaded a data file. (%s)" % os.path.basename(data_file_name))            
                 
         except Exception as ee:
             self.toStatusBar("An error while opening the data file.(%s)" % ee)
@@ -155,11 +172,15 @@ class ScannerGUI(QtWidgets.QWidget, Ui_Form):
         self._setDefaultFileName()
         
     def _initializePosition(self):
-        for axis in ["x", "y"]:
+        for axis in ["x", "y", "z"]:
             initial_pos = float(getattr(self.parent, "LBL_%s_pos" % axis.upper()).text())
             step = getattr(self, "GUI_%s_step" % axis).value()
+            # Initial position
             getattr(self, "GUI_%s_start" % axis).setValue(initial_pos - step*self.SPBOX_vicinity_length.value())
             getattr(self, "GUI_%s_stop" % axis).setValue(initial_pos + step*self.SPBOX_vicinity_length.value())
+            # Initial step size
+            getattr(self, "GUI_%s_start" % axis).setSingleStep(step)
+            getattr(self, "GUI_%s_stop" % axis).setSingleStep(step)
         
     def _setDefaultFileName(self):
         self.LE_save_file_dir.setText(self.save_file_dir)
@@ -300,7 +321,11 @@ class ScannerGUI(QtWidgets.QWidget, Ui_Form):
         for spin_box in [getattr(self, "GUI_%s_%s" % (axis, attr_name)) for attr_name in ("start", "stop")]:
             spin_box.setSingleStep(value)
         self.setSignificant_figure(value)
-            
+        
+    def changedThroughFocusScanOption(self):
+        is_checked = self.sender().isChecked()
+        for spin_box in [getattr(self, "GUI_z_%s" % (attr_name)) for attr_name in ("start", "stop", "step")]:
+            spin_box.setEnabled(is_checked)
             
     def setSignificant_figure(self, value):
         if 1 <= value:
@@ -324,13 +349,22 @@ class ScannerGUI(QtWidgets.QWidget, Ui_Form):
             return
         
         else:
-            for axis in ["x", "y"]:
-                start = getattr(self, "GUI_%s_start" % axis).value()
-                stop  = getattr(self, "GUI_%s_stop" % axis).value()
-                if stop <= start:
-                    self.toStatusBar("The stop value should be larger than the start value.")
-                    return
-            self.scanner.startScanning()
+            if self.CB_through_focus_scan.isChecked():
+                for axis in ["x", "y", "z"]:
+                    start = getattr(self, "GUI_%s_start" % axis).value()
+                    stop  = getattr(self, "GUI_%s_stop" % axis).value()
+                    if stop <= start:
+                        self.toStatusBar("The stop value should be larger than the start value.")
+                        return
+                self.scanner.startScanning()
+            else:
+                for axis in ["x", "y"]:
+                    start = getattr(self, "GUI_%s_start" % axis).value()
+                    stop  = getattr(self, "GUI_%s_stop" % axis).value()
+                    if stop <= start:
+                        self.toStatusBar("The stop value should be larger than the start value.")
+                        return
+                self.scanner.startScanning()
     
     def pressedChangeSaveDir(self):
         try:
@@ -488,9 +522,32 @@ class PMTScanner(QObject):
             
         if self.gui.CB_auto_go_to_max.isChecked():
             self.goToMaxPosition()
-            
+        
+        if self.gui.CB_through_focus_scan.isChecked():
+            if self.z_scan_idx+1 < len(self.z_scan_range):
+                self.scan_idx = 0
+                self.z_scan_idx += 1
+                # Save current data
+                self.gui.saveData()
+                # Return to scanning state
+                self._status = "scanning"
+                # Move to target position of z-azis                    
+                z_position_dict = {}
+                for motor_key in self.gui.motor_axial.keys():
+                    z_position_dict[motor_key] = self.z_scan_range[self.z_scan_idx]
+                self.pmt_aligner.MoveToPosition(z_position_dict)        
+                self._list_motors_moving = list(self.gui.motor_axial.keys())
+                return
+                    
         self.stopScanning()
         self.gui.saveData()
+    
+    # def wait_until_z_move(self, target_z):
+    #     while True:
+    #         curr_val = float(getattr(self.gui.parent, "LBL_Z_pos").text())
+    #         if np.round(curr_val, 3) == np.round(target_z, 3):
+    #             break
+    #     return 
         
     def goToMaxPosition(self):
         self.x_max_pos, self.y_max_pos = self._getMaxPosition()
@@ -505,7 +562,6 @@ class PMTScanner(QObject):
         self.x_scan_range = self.getScanRange(*[getattr(self.gui, "GUI_x_%s" % x).value() for x in ["start", "stop", "step"]])
         self.y_scan_range = self.getScanRange(*[getattr(self.gui, "GUI_y_%s" % x).value() for x in ["start", "stop", "step"]])
         
-
         self.x_scan_coord, self.y_scan_coord = self.getScanCoordinates(self.x_scan_range, self.y_scan_range)
         self.scan_image = np.zeros((self.y_scan_range.shape[0], self.x_scan_range.shape[0]))
         
@@ -514,16 +570,77 @@ class PMTScanner(QObject):
         self._list_motors_moving = []
         self._sig_scanner.emit("R")
         
-    def startScanning(self):
-        self.resetScanning()
-        
-        if self.sequencer.is_opened:
-            self.setOccupant(True)
-            self._status = "scanning"
-            self.movegMotorByIndex(self.scan_idx)
+    def start_2D_Scanning(self):
+        self.resetScanning()            
+        self.setOccupant(True)
+        self._status = "scanning"
+        self.moveMotorByIndex(self.scan_idx)         
             
+    def startScanning(self):
+        if self.sequencer.is_opened:
+            # self.save_dict = {}
+            
+            if not self.gui.CB_through_focus_scan.isChecked():
+                curr_z = float(getattr(self.gui.parent, "LBL_Z_pos").text())
+                self.z_scan_range = np.array([curr_z])
+                self.start_2D_Scanning()
+            
+            else:
+                self.z_scan_range = self.getScanRange(*[getattr(self.gui, "GUI_z_%s" % x).value() for x in ["start", "stop", "step"]])
+                # Set status to scanning
+                self._status = "scanning"
+                # Move to initial position of z-azis                    
+                z_position_dict = {}
+                self.z_scan_idx = 0
+                for motor_key in self.gui.motor_axial.keys():
+                    z_position_dict[motor_key] = self.z_scan_range[self.z_scan_idx]
+                self.pmt_aligner.MoveToPosition(z_position_dict)                    
+                self._list_motors_moving = list(self.gui.motor_axial.keys())
+                # self.start_2D_Scanning()
+                    
         else:
-            self.pmt_aligner.toStatusBar("The FPGA is not opened!")
+            self.pmt_aligner.toStatusBar("The FPGA is not opened!") 
+            
+        # if self.sequencer.is_opened:
+        #         self.resetScanning()
+            
+        #         # self.z_scan_range = np.array([self.gui.parent.LBL_Z_pos])
+        #         self.setOccupant(True)
+        #         self._status = "scanning"
+        #         self.moveMotorByIndex(self.scan_idx)
+    
+        #         # self.save_dict[self.gui.parent.LBL_Z_pos] = {"img": self.plot_im,
+        #         #                                              "x_pos": self.scanner.x_scan_range,
+        #         #                                              "y_pos": self.scanner.y_scan_range}
+                
+        #     else:
+        #         self.z_scan_range = self.getScanRange(*[getattr(self.gui, "GUI_z_%s" % x).value() for x in ["start", "stop", "step"]])
+            
+        #         self.setOccupant(True)
+        #         self._status = "scanning"
+                
+        #         for z_val in self.z_scan_range:
+        #             # self.save_dict[z_val] = {}
+
+        #             # Move to target position of z-azis                    
+        #             z_position_dict = {}
+        #             for motor_key in self.gui.motor_axial.keys():
+        #                 z_position_dict[motor_key] = z_val
+        #             self.pmt_aligner.MoveToPosition(z_position_dict)
+
+        #             # Start 2D scan
+        #             self.resetScanning()
+        #             if self.sequencer.is_opened:
+        #                 self.setOccupant(True)
+        #                 self._status = "scanning"
+        #                 self.moveMotorByIndex(self.scan_idx)
+                        
+        #             # self.save_dict[z_val] = {"img": self.plot_im,
+        #             #                          "x_pos": self.scanner.x_scan_range,
+        #             #                          "y_pos": self.scanner.y_scan_range}
+
+        # else:
+        #     self.pmt_aligner.toStatusBar("The FPGA is not opened!")          
             
     def moveMotorByIndex(self, scan_idx):
         position_dict = {}
@@ -584,9 +701,20 @@ class PMTScanner(QObject):
     def _connect_signals(self):
         for motor in self.motors.values():
             motor._sig_motor_move_done.connect(self._motorMoved)
+        
+        for motor in self.gui.motor_axial.values():
+            motor._sig_motor_move_done.connect(self._motorMoved_axial)
             
         self.sequencer.sig_seq_complete.connect(self._donePMTExposure)
-            
+        
+    def _motorMoved_axial(self, nick, position):
+        if self._status == "scanning":
+            if nick in self._list_motors_moving:
+                self._list_motors_moving.remove(nick)
+                
+            if not len(self._list_motors_moving):
+                self.start_2D_Scanning()
+        
     def _motorMoved(self, nick, position):
         if self._status == "scanning":
             if nick in self._list_motors_moving:
@@ -597,7 +725,7 @@ class PMTScanner(QObject):
         
     def _donePMTExposure(self):
         if self.sequencer.occupant == self:
-            raw_pmt_count = np.asarray(self.sequencer.data[0]) # kind of deep copying...
+            raw_pmt_count = np.asarray(self.sequencer.data[0]) # kiiend of deep copying...
             if len(raw_pmt_count) > 1:
                 pmt_count = np.mean(raw_pmt_count[:, 2])
             else:
@@ -618,5 +746,5 @@ class PMTScanner(QObject):
         return x_pos, y_pos
 
 if __name__ == "__main__":
-    pa = Scanner()
+    pa = PMTScanner()
     pa.show()
