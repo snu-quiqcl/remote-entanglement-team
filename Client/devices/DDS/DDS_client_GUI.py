@@ -85,32 +85,37 @@ class SubWindow(QtWidgets.QWidget, sub_ui):
         elif self.unit == "Hz":
             spin_box.setMaximum(450e6)
             
-    def changeFreq(self, value):
+    def changeFreq(self):
         if self.user_update:
             obj_name = self.sender().objectName()
             if "DDS1" in obj_name:
                 channel = 1
             else:
                 channel = 2
+            
+            value = getattr(self, obj_name).value()
             value = value/self.unit_dict[self.unit] # scales to MHz
             self._freq_signal.emit(channel, value)
             
-    def changeCurr(self, value):
+    def changeCurr(self):
         if self.user_update:
             obj_name = self.sender().objectName()
             if "DDS1" in obj_name:
                 channel = 1
             else:
                 channel = 2
+            value = getattr(self, obj_name).value()
             self._curr_signal.emit(channel, value)
             
-    def changePhase(self, value):
+    def changePhase(self):
         if self.user_update:
             obj_name = self.sender().objectName()
             if "DDS1" in obj_name:
                 channel = 1
             else:
                 channel = 2
+            
+            value = getattr(self, obj_name).value()
             self._phase_signal.emit(channel, value)
             
         
