@@ -796,7 +796,7 @@ class tabWidget(QMainWindow, Ui_tabWindow, WaveMeter_Theme_Base):
             # q) how to print err message?
             print("Wrong Format")
             return
-        self.spinboxExpTime.setValue(data[7])
+        self.spinboxExpTime.setValue(int(data[7]))
 
         ### Update P, I, D, gain values in the PIDWidget
         self.PIDWidget.PSpinbox.setValue(self.channel.PP)
