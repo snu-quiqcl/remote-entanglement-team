@@ -7,7 +7,7 @@ Created on Wed Feb  7 07:59:12 2018
 According to the given mapping, we will add alias for each pin
 """
 
-from HardwareDefinition_v4_01 import *
+from HardwareDefinition_v4_03 import *
 
 # Input port pin mapping
 # For input pin, there will be only one driver
@@ -15,15 +15,15 @@ input_mapping = {'jb_2': 'PMT', 'jb_0': 'PMT2', 'jb_6': 'PMT3', 'jb_4':'PMT4', '
 
 # Output port pin mapping
 # For output pin, there might be more than one device controlled by the output pin
-output_mapping = {'EOM_2G': 'jb_7',
-                  'EOM_7G_1': 'jb_1',
-                  'EOM_7G_2': 'jb_3',
-                  'AOM': 'jb_5',
-                  'MW': 'ja_3',
-                  'AOM2': 'ja_1',
-                  'AOM3': 'ja_7',
-                  'PCKR': 'ja_5',
-                  'TRG': 'ja_4'}
+output_mapping = {'EOM_7G_1': 'ja_0',
+                  'EOM_7G_2': 'ja_1',
+                  'AOM': 'ja_3',
+                  'PCKR': 'ja_4',
+                  'AOM3': 'ja_5',
+                  'MW': 'ja_6',
+                  'TRG': 'ja_7',
+                  'AOM2': 'jb_3',
+                  'EOM_2G': 'jb_7'}
 description = {'EOM_2G': 'Initialization beam', 'EOM_7G_1': 'Cooling sideband', 'EOM_7G_2': 'Cooling sideband', 'AOM': 'Turning beam on/off', 'MW': 'Turing MW on/off', 'AOM2': 'Cooling beam for 170', 'AOM3': 'Controlling 369 A',
                'PCKR': 'Pulsepicker signal',
                'TRG': 'Temperal signal'}
