@@ -134,9 +134,16 @@ class DS1052E_GUI(QtWidgets.QWidget, Ui_Form, Oscilloscpoe_theme_base):
             for ch, on in enumerate(self.CH_list):
                 if on:
                     y_data = wave_data["data"][ch][::2]
+                    
+                    # If auto, is_auto == 'auto' 
+                    # Else, is_auto will be some data point
+                    is_auto = str(wave_data["data"][ch])
+                    
+                # if not y_data[0] == "auto":
+                if not is_auto == "auto":
+                    # Load x data (time)
                     x_data = wave_data["time"][ch][::2]
                     
-                if not y_data[0] == "auto":
                     off_scale = np.linspace(-0.1, 0.1, 201)[self.Vposition[ch]]
                     x_scale = np.linspace(0.1, 0.5, 11)[self.Hscale]
                     
@@ -223,13 +230,11 @@ class DS1052E_GUI(QtWidgets.QWidget, Ui_Form, Oscilloscpoe_theme_base):
         else :
             return ('----')
     
-
-
         
     def pressedAutoSet(self):
-        pass
-        # if self.plot_fetcher.isRunning():
-        #     self.plot_fetcher.queue.put("")
+        # pass
+        if self.plot_fetcher.isRunning():
+            self.plot_fetcher.queue.put("AUTO:%d\n" % self.current_idx)
     
     def pressedSaveButton(self):
         self.db_recorder.start()
