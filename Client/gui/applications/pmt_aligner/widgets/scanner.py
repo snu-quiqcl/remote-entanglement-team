@@ -485,7 +485,8 @@ class PMTScanner(QObject):
     
     def getScanCoordinates(self, x_range, y_range):
         x_scan_coord, y_scan_coord = np.meshgrid(x_range, y_range)
-        x_scan_coord[1::2] = np.flip(x_scan_coord[1::2], 1)
+        
+        # x_scan_coord[1::2] = np.flip(x_scan_coord[1::2], 1) # If this option is on, backlash will take much time
         
         return x_scan_coord.flatten(), y_scan_coord.flatten()
     
@@ -497,8 +498,9 @@ class PMTScanner(QObject):
         image_shape = self.scan_image.shape
         y_idx = self.scan_idx // image_shape[1]
         x_idx = self.scan_idx %  image_shape[1]
-        if (y_idx % 2):
-            x_idx = image_shape[1] - x_idx - 1
+        # Turn on when the x-axis is revered for even y_idx
+        # if (y_idx % 2):
+        #     x_idx = image_shape[1] - x_idx - 1
         
         return x_idx, y_idx
     
@@ -600,53 +602,12 @@ class PMTScanner(QObject):
                     
         else:
             self.pmt_aligner.toStatusBar("The FPGA is not opened!") 
-            
-        # if self.sequencer.is_opened:
-        #         self.resetScanning()
-            
-        #         # self.z_scan_range = np.array([self.gui.parent.LBL_Z_pos])
-        #         self.setOccupant(True)
-        #         self._status = "scanning"
-        #         self.moveMotorByIndex(self.scan_idx)
-    
-        #         # self.save_dict[self.gui.parent.LBL_Z_pos] = {"img": self.plot_im,
-        #         #                                              "x_pos": self.scanner.x_scan_range,
-        #         #                                              "y_pos": self.scanner.y_scan_range}
-                
-        #     else:
-        #         self.z_scan_range = self.getScanRange(*[getattr(self.gui, "GUI_z_%s" % x).value() for x in ["start", "stop", "step"]])
-            
-        #         self.setOccupant(True)
-        #         self._status = "scanning"
-                
-        #         for z_val in self.z_scan_range:
-        #             # self.save_dict[z_val] = {}
-
-        #             # Move to target position of z-azis                    
-        #             z_position_dict = {}
-        #             for motor_key in self.gui.motor_axial.keys():
-        #                 z_position_dict[motor_key] = z_val
-        #             self.pmt_aligner.MoveToPosition(z_position_dict)
-
-        #             # Start 2D scan
-        #             self.resetScanning()
-        #             if self.sequencer.is_opened:
-        #                 self.setOccupant(True)
-        #                 self._status = "scanning"
-        #                 self.moveMotorByIndex(self.scan_idx)
                         
-        #             # self.save_dict[z_val] = {"img": self.plot_im,
-        #             #                          "x_pos": self.scanner.x_scan_range,
-        #             #                          "y_pos": self.scanner.y_scan_range}
-
-        # else:
-        #     self.pmt_aligner.toStatusBar("The FPGA is not opened!")          
-            
     def moveMotorByIndex(self, scan_idx):
         position_dict = {}
         for motor_key in self.motors.keys():
             self._list_motors_moving.append(motor_key)
-            position_dict[motor_key] = getattr(self, "%s_scan_coord" % ("x" if "x" in motor_key else "y"))[scan_idx]
+            position_dict[motor_key] = np.round(getattr(self, "%s_scan_coord" % ("x" if "x" in motor_key else "y"))[scan_idx], 3)
         self._list_motors_moving = list(self.motors.keys())
         self.pmt_aligner.MoveToPosition(position_dict)
         

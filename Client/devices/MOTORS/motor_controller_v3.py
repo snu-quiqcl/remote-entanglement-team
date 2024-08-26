@@ -102,15 +102,14 @@ class MotorController(QObject):
             if "_serno" in option:
                 nickname = option[:option.find("_serno")]
                 serno = self.cp.get("motors", option)
-                                
+
                 motor_dict[nickname] = self._addMotor(serno, mtype, nickname)
-                
+
             elif "_owner" in option:
                 nickname = option[:option.find("_owner")]
                 owner = self.cp.get("motors", option)
-                
+
                 motor_dict["%s:%s" % (owner, nickname)] = self._addRemoteMotor(owner, "remote", nickname)
-                
                 
         return motor_dict
     

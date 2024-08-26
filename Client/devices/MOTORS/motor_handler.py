@@ -36,7 +36,7 @@ class MotorHandler(QThread):
         
         self.serial = ser
         self.nickname = nick
-        self.target = 0
+        self._target = 0
         self.queue = Queue()
         
     @property
@@ -121,7 +121,9 @@ class MotorHandler(QThread):
             target_position = 13
         if target_position < 0:
             target_position = 0
-        self._motor.move_to_position(target_position)
+        
+        if not target_position == self.position:
+            self._motor.move_to_position(target_position)
         self.position = self.getPosition()
         self._sig_motor_move_done.emit(self.nickname, self.position)
         
