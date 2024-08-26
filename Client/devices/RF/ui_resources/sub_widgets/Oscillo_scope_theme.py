@@ -215,8 +215,10 @@ class Oscilloscpoe_theme_base():
         self.setStyleSheet(self._theme_base[self._theme])
         self.NON_LBL_TITLE2.setStyleSheet("background-color:rgb(245, 141, 27);color:rgb(0,0,0);")
         if self._theme == "black":
-            self.SLB_CH1_VS.setStyleSheet("QSlider::handle:vertical {background:rgb(245, 141, 27);width: 12px;height: 6px;border-radius: 2px;}")
-            self.SLB_CH2_VS.setStyleSheet("QSlider::handle:vertical {background:rgb(245, 141, 27);width: 12px;height: 6px;border-radius: 2px;}")
-            self.SLB_H.setStyleSheet("QSlider::handle:horizontal {background:rgb(245, 141, 27);width: 12px;height: 6px;border-radius: 2px;}")
+            try:
+                self.SLB_CH1_VS.setStyleSheet("QSlider::handle:vertical {background:rgb(245, 141, 27);width: 12px;height: 6px;border-radius: 2px;}")
+                self.SLB_CH2_VS.setStyleSheet("QSlider::handle:vertical {background:rgb(245, 141, 27);width: 12px;height: 6px;border-radius: 2px;}")
+                self.SLB_H.setStyleSheet("QSlider::handle:horizontal {background:rgb(245, 141, 27);width: 12px;height: 6px;border-radius: 2px;}")
+            except: pass
         self.BTN_run.setStyleSheet(self._pushbutton_stylesheet[self._theme])
         # self.statusbar.setStyleSheet(self._statusbar_stylesheet[self._theme])

@@ -216,6 +216,10 @@ class RF_ChannelWidget(QtWidgets.QWidget, channel_ui):
                  self.BTN_oscillo.setVisible(True)
                  self.BTN_oscillo.clicked.connect(self.openOscilloScope)
                  
+            if "oscillo_mso7054" in config_options:
+                 self.BTN_oscillo.setVisible(True)
+                 self.BTN_oscillo.clicked.connect(self.openOscilloScope_MSO7054)
+                 
             if "power_unit" in config_options:
                 power_unit = self.config.get(self.device_name, "power_unit")
                 if power_unit in ["vpp", "Vpp"]:
@@ -606,7 +610,20 @@ class RF_ChannelWidget(QtWidgets.QWidget, channel_ui):
         self.OSC.raise_()
         self.OSC.activateWindow()
         self.OSC.showNormal()
-
+        
+        
+    def openOscilloScope_MSO7054(self):
+        if not "OSC" in self.__dict__:
+        
+            sys.path.append(sub_file_path + "/sub_widgets/")
+            from Oscillo_scope_gui_MSO7054 import MSO7054_GUI
+            self.OSC = MSO7054_GUI(self, theme="black")    
+            self.OSC.changeTheme("black")
+            self.OSC.CBOX_channel.setCurrentIndex(0)
+                
+        self.OSC.raise_()
+        self.OSC.activateWindow()
+        self.OSC.showNormal()
 
 
 if __name__ == "__main__":
@@ -619,3 +636,5 @@ if __name__ == "__main__":
     RF = RF_ControllerGUI(None, temp_device_dict)
     RF.setWindowTitle("RF GUI v2")
     RF.show()
+    app.exec_()
+    sys.exit(app.exec())

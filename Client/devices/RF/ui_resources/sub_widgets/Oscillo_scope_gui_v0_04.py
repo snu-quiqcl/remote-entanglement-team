@@ -35,13 +35,16 @@ pg.setConfigOptions(antialias=True) # This makes the plot smoother.
 class DS1052E_GUI(QtWidgets.QWidget, Ui_Form, Oscilloscpoe_theme_base):
 
     def closeEvent(self, e):
-        if self.plot_fetcher.scope:
-            if not self.plot_fetcher.scope._closed:
-                self.plot_fetcher.scope.sendall(bytes("STOP\n", 'latin-1'))
-                self.BTN_run.setChecked(False)
-                self.plot_fetcher.scope.close()
-                print('Oscilloscope is closed')
-        self.deleteLater()
+        self.BTN_run.setChecked(False)
+        self.plot_fetcher.quit()
+        self.hide()
+        # if self.plot_fetcher.scope:
+        #     if not self.plot_fetcher.scope._closed:
+        #         self.plot_fetcher.scope.sendall(bytes("STOP\n", 'latin-1'))
+        #         self.BTN_run.setChecked(False)
+        #         self.plot_fetcher.scope.close()
+        #         print('Oscilloscope is closed')
+        # self.deleteLater()
         
     def __init__(self, parent=None, theme="black"):
         QtWidgets.QWidget.__init__(self)
