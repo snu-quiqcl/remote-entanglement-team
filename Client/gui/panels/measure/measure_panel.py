@@ -33,6 +33,13 @@ class MeasurePanel(QtWidgets.QMainWindow, main_ui, measure_panel_theme_base):
     LIT_IP = "172.22.22.92"
     LIT_PORT = 53000
     
+    mirror_mapping = {"MIRROR1": "EC Collection",
+                      "MIRROR2": "399nm Mirror",
+                      "MIRROR3": "EC Excitation",
+                      "MIRROR4": "EA Collection",
+                      "MIRROR5": "EA Excitation"
+                      }
+    
  
     def closeEvent(self, e):
         self.parent.socket.breakConnection(True)
@@ -142,9 +149,12 @@ class MeasurePanel(QtWidgets.QMainWindow, main_ui, measure_panel_theme_base):
         self.resetUi()
     
     def controlMirror(self, command):
-        mirror_idx = int(self.CBOX_mirror.currentText()[6:])
+        # mirror_idx = int(self.CBOX_mirror.currentText()[6:])
+        mirror_idx = int(self.CBOX_mirror.currentIndex())+1
         try:
-            self.MFF.sendall(bytes("MIRROR:%d:TURN:%s\n" % (mirror_idx, command), "latin-1"))
+            # self.MFF.sendall(bytes("MIRROR:%d:TURN:%s\n" % (mirror_idx, command), "latin-1"))
+            nickname = self.CBOX_mirror.currentText()
+            self.MFF.sendall(bytes(nickname + ":%d:TURN:%s\n" % (mirror_idx, command), "latin-1"))
             self.MFF.recv(1024).decode('latin-1')
             self.toStatusBar("Mirror %d turned %s." % (mirror_idx, command))
         except:
@@ -251,6 +261,7 @@ class MeasurePanel(QtWidgets.QMainWindow, main_ui, measure_panel_theme_base):
         for mirror in mirror_list:
             if mirror[-1] == "\n":
                 mirror = mirror[:-1]
+            # mirror_name = self.mirror_mapping[mirror]
             self.CBOX_mirror.addItem("%s" % mirror)
             
     def resetUi(self):

@@ -83,12 +83,12 @@ class Oven_controller(QtWidgets.QWidget):
                     self.CH = "01"
                     
             try:
-                self.OVEN.mirror.sendall(bytes("399_FLIP:2:TURN:%s\n" % (mirror_direction), 'latin-1'))
+                self.OVEN.mirror.sendall(bytes("MIRROR:2:TURN:%s\n" % (mirror_direction), 'latin-1'))
             except:
                 print("Lost connection to the mirror server. trying to reconnect.")
                 try:
                     self.OVEN.connect_to_mirror()
-                    self.OVEN.mirror.sendall(bytes("399_FLIP:2:TURN:LEFT\n", 'latin-1'))
+                    self.OVEN.mirror.sendall(bytes("MIRROR:2:TURN:LEFT\n", 'latin-1'))
                 except:
                     print("Failed to reconnect. please check the status of the server.")
             self.OVEN.mirror.recv(1024)
