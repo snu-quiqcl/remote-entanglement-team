@@ -404,6 +404,7 @@ class ScannerGUI(QtWidgets.QWidget, Ui_Form):
             self.scanner.continueScanning()
     
     def pressedSaveButton(self):
+        self.LE_save_file_name.setText("%s_%s" % (datetime.datetime.now().strftime("%y%m%d_%H%M%S"), self.app_name))
         pre_filename = "%s/%s" % (self.LE_save_file_dir.text(), self.LE_save_file_name.text())
         save_file_name, _ = QFileDialog.getSaveFileName(self, "Saving file",
                                                         pre_filename, "Data files (*.pkl)")
