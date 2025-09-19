@@ -54,6 +54,7 @@ class Oven_controller(QtWidgets.QWidget):
     def HeaterON(self, on_flag):
         if on_flag:
             self.ON = True
+            self.GUI._oven_on = self.ON
 
             try:
                 self.OVEN.oven.sendall(bytes("SHUTTER:1:OPEN\n", 'latin-1'))
@@ -105,14 +106,14 @@ class Oven_controller(QtWidgets.QWidget):
                 
         else:
             if self.ON:
-                self.OVEN.oven.sendall(bytes("OVEN:%s:OFF\n" % self.CH, 'latin-1'))
+                self.OVEN.oven.sendall(bytes("SHUTTER:1:CLOSE\n", 'latin-1'))
                 self.BTN_ON.setEnabled(False)
-                if self.GUI.CBOX_turn_off.isChecked():
-                    time.sleep(0.2)
-                    self.OVEN.oven.sendall(bytes("SHUTTER:1:CLOSE\n", 'latin-1'))
-                    data = self.OVEN.oven.recv(1024).decode('latin-1')
-                    if "CLOSE" in data:
-                        print("Shutter closed.")
+                # if self.GUI.CBOX_turn_off.isChecked():
+                time.sleep(0.2)
+                self.OVEN.oven.sendall(bytes("OVEN:%s:OFF\n" % self.CH, 'latin-1'))
+                data = self.OVEN.oven.recv(1024).decode('latin-1')
+                if "CLOSE" in data:
+                    print("Shutter closed.")
             else:
                 self.RestoreACT()
             
@@ -121,13 +122,11 @@ class Oven_controller(QtWidgets.QWidget):
         """
         RestoreACT resets the GUI button and functions
         """
-        self.BTN_ON.setEnabled(True)
-        
+        self.BTN_ON.setEnabled(True)        
         self.volLABEL(0)
         self.curLABEL(0)
         self.Timer.setStyleSheet('')
         self.Timer.setText("Timer: 00:00")
-        
     
     def uiUPDATE(self, count):
         if 0 < count and count <= 60:

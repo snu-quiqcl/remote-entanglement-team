@@ -9,6 +9,7 @@ import os
 os.system('CLS')
 
 import time
+import cv2
 import numpy as np
 from datetime import datetime
 from configparser import ConfigParser
@@ -80,6 +81,14 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
 
         self.LBL_directory.setText(dirname + "/data")
         
+        self.roi_counts_temp = None
+        self.spot_contours = []  # 외곽선 아이템 저장 리스트
+        self.oven_thres = 1000
+        self.STATUS_OVEN_THRES.setText(str(self.oven_thres))
+        self.target_nion = 10
+        self.STATUS_TION.setText(str(self.target_nion))
+        self.STATUS_NION.setText(str(0))
+        self._oven_on = False
         
     #%% Initialization
     def _initUi(self):       
@@ -92,6 +101,7 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
         self.BTN_oven_settings.setIcon(QtGui.QIcon(dirname + '/Libs/gui_settings.ico'))
         self._makePlot(self.CCD_image_label)
         
+        self.STATUS_roi_avg.setText("Nan")
         
     def _init_params(self):
         self.LBL_gain.setText(str(self.cam._param_dict["GAIN"]))
@@ -135,7 +145,7 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
                 getattr(self, item).setStyleSheet(self._theme_color[self._theme]["STATUS"])
             elif "TXT_" in item:
                 getattr(self, item).setStyleSheet(self._theme_color[self._theme]["TXT"])
-
+            
         self.updatePlot()
         
     def _makePlot(self, frame):
@@ -162,7 +172,7 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
         frame.setLayout(layout)
         
         
-        self._plot_im = np.zeros((self._height, self._width))
+        self._plot_im = np.zeros((self._height, self._width), dtype=np.uint16)
         
         self.plot.vb.setLimits(xMin=0,
                                xMax=self._width,
@@ -386,6 +396,21 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
     def ChangeExposureTime(self):
         exp_time = float(self.STATUS_exp_time.text())
         self.cam.toWorkList(["C", "EXPT", [exp_time]])
+    
+    def ChangeOvenThreshold(self):
+        try:
+            oven_thres = int(self.STATUS_OVEN_THRES.text())
+            self.oven_thres = oven_thres
+            print(self.oven_thres)
+        except:
+            self.STATUS_OVEN_THRES.setText(str(self.oven_thres))
+        
+    def ChangeTion(self):
+        try:
+            TION = int(self.STATUS_TION.text())
+            self.target_nion = TION
+        except:
+            self.STATUS_TION.setText(str(self.target_nion))
         
     def _timedOutUpdateTimer(self):
         if self._update_enable_flag:
@@ -417,10 +442,46 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
             self.STATUS_raw_max.setText(str(self.raw_max))
             
             self.colorbar.setLevels( (self.im_min, self.im_max) )
-            self._plot_im = self.image_handler.image_buffer
+            self._plot_im = self.image_handler.image_buffer            
             
+            
+            if self.CBOX_turn_off.isChecked():
+                for item in self.spot_contours:
+                    self.plot.removeItem(item)
+                self.spot_contours.clear()
+                # X, Y are flipped in the image
+                roi_img = self._plot_im[self.zoom_y1:self.zoom_y2, self.zoom_x1:self.zoom_x2].copy()
+                try:
+                    _, thresh = cv2.threshold(roi_img, self.oven_thres, 255, cv2.THRESH_BINARY) # src, thresh, maxval, type
+                    contours, _ = cv2.findContours(thresh.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    # Contour plot
+                    for cnt in contours:
+                        if cv2.contourArea(cnt) < 3:
+                            continue
+                        contour = np.squeeze(cnt).astype(float)
+                        if contour.ndim != 2 or contour.shape[0] < 3:
+                            continue
+                        contour[:, 0] += self.zoom_x1
+                        contour[:, 1] += self.zoom_y1
+                        x, y = contour[:, 0], contour[:, 1]
+                        curve = pg.PlotCurveItem(x, y, pen=pg.mkPen('r', width=2))
+                        self.plot.addItem(curve)
+                        self.spot_contours.append(curve)
+                except:
+                    pass
+                    
+                cur_nion = len(self.spot_contours)
+                self.STATUS_NION.setText(str(cur_nion))                     
+                if cur_nion >= self.target_nion and self._oven_on:
+                    self.oc.HeaterON(on_flag=False)
+                    self._oven_on = False
+                
+            else:
+                self.STATUS_NION.setText(str(0)) 
+                for item in self.spot_contours:
+                    self.plot.removeItem(item)
+                       
             self.im.setImage(self._plot_im, autoLevels=False)
-            
             QtWidgets.QApplication.processEvents()
                             
     #%% for EMCCD
