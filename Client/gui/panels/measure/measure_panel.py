@@ -79,8 +79,8 @@ class MeasurePanel(QtWidgets.QMainWindow, main_ui, measure_panel_theme_base):
             elif "EC" in nickname.upper():
                 self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_BLOCK.png'))
                 self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_OPEN.png'))
-            self.BTN_mirror_left.setIconSize(QSize(150,100))
-            self.BTN_mirror_right.setIconSize(QSize(150,100))
+            self.BTN_mirror_left.setIconSize(QSize(200,150))
+            self.BTN_mirror_right.setIconSize(QSize(200,150))
         else:
             self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_LEFT.png'))
             self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_RIGHT.png'))            
