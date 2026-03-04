@@ -12,6 +12,7 @@ dirname = os.path.dirname(filename)
 
 # PyQt libraries
 from PyQt5 import uic, QtWidgets, QtGui
+from PyQt5.QtCore import QSize
 
 from measure_panel_theme import measure_panel_theme_base
 main_ui_file = dirname + "/measure_panel.ui"
@@ -63,11 +64,29 @@ class MeasurePanel(QtWidgets.QMainWindow, main_ui, measure_panel_theme_base):
         self.mirror_button_list = [self.BTN_mirror_left, self.BTN_mirror_right]
         self.shutter_button_list = [self.BTN_shutter_open, self.BTN_shutter_close]
         
-        self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_LEFT.png'))
-        self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_RIGHT.png'))
         self.BTN_shutter_open.setIcon(QtGui.QIcon(dirname + '/icons/SHUTTER_OPEN.png'))
         self.BTN_shutter_close.setIcon(QtGui.QIcon(dirname + '/icons/SHUTTER_CLOSE.png'))\
             
+        self.CBOX_mirror.currentTextChanged.connect(self._mirrorChanged)
+        self._mirrorChanged(self.CBOX_mirror.currentText())
+        
+        
+    def _mirrorChanged(self, nickname):
+        if "CCD" in nickname.upper():
+            if "EA" in nickname.upper():
+                self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_OPEN.png'))
+                self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_BLOCK.png'))
+            elif "EC" in nickname.upper():
+                self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_BLOCK.png'))
+                self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_OPEN.png'))
+            self.BTN_mirror_left.setIconSize(QSize(150,100))
+            self.BTN_mirror_right.setIconSize(QSize(150,100))
+        else:
+            self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_LEFT.png'))
+            self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_RIGHT.png'))            
+            self.BTN_mirror_left.setIconSize(QSize(100,150))
+            self.BTN_mirror_right.setIconSize(QSize(100,150))
+        
     def _init_wavemeterUi(self):
         sys.path.append(dirname + "/library/")
         max_num_channel = int(self.cp.get("measure_panel", "max_channel"))
