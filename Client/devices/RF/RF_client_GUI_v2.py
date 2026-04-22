@@ -4,7 +4,6 @@ Created on Thu Sep 28 22:51:42 2023
 
 @author: Junho Jeong
 """
-
 import os, sys
 from ui_resources.RF_client_device_indicator import DeviceIndicator
 from configparser import ConfigParser
@@ -139,7 +138,7 @@ class RF_ChannelWidget(QtWidgets.QWidget, channel_ui):
     key_dict = {"o": "out",
                 "p": "power",
                 "f": "freq",
-                "ph": "phase",
+                "h": "phase",
                 "maxp": "max_power",
                 "minp": "min_power",
                 "maxf": "max_freq",
@@ -197,7 +196,9 @@ class RF_ChannelWidget(QtWidgets.QWidget, channel_ui):
         self.editedFreq()
         
     def pressedPhaseSliderBar(self, value_delta:int):
-        print(value_delta)
+        phase = self.SPB_phase.value() + value_delta*self.SPB_phase_step.value()
+        self.SPB_phase.setValue(phase)
+        self.editedPhase()
         
 
     def readConfig(self):
@@ -292,7 +293,6 @@ class RF_ChannelWidget(QtWidgets.QWidget, channel_ui):
     def updateParametersByKey(self, key):
         if key in self.key_dict.keys():
             key = self.key_dict[key]
-
         ch = self.device_channel
         value = self.device.settings[ch][key]
         
@@ -494,7 +494,8 @@ class RF_ChannelWidget(QtWidgets.QWidget, channel_ui):
             phase = ph_value
         elif self.CBOX_phase.currentText() == "radian":
             phase = ph_value/180*np.pi
-        
+        if self.device.settings[self.device_channel]["phase"] == None:
+            self.device.settings[self.device_channel]["phase"]=0
         if not np.round(self.device.settings[self.device_channel]["phase"], 3) == phase:
             self.controller.setPhase(self.device_name, self.device_channel, phase)
             self.SPB_phase.setStyleSheet(self._not_updated_stylesheet)

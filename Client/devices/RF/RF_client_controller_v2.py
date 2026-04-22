@@ -120,7 +120,7 @@ class RF_ClientInterface(QThread):
     @requires_device_open
     def setPhase(self, dev_nick, channel, phase):
         if dev_nick in self.RF_dict.keys():
-            msg = ["SETPH", channel, phase]
+            msg = ["SETH", channel, phase]
             self.toSocket(["C", "RF", dev_nick, msg])
         else:
             self.toGUI("The device (%s) is missing!" % dev_nick)
@@ -158,7 +158,7 @@ class RF_ClientInterface(QThread):
         if dev_nick in self.RF_dict.keys():
             if not type(channels) == list:
                 channels = list(channels)
-            msg = ["SETPH"] + channels
+            msg = ["SETH"] + channels
             self.toSocket(["Q", "RF", dev_nick, msg])
         else:
             self.toGUI("The device (%s) is missing!" % dev_nick)
@@ -220,10 +220,9 @@ class RF_ClientInterface(QThread):
                     print("disconnected")
                     
                 elif cmd in self.RF_dict.keys():
-                    
+
                     sub_cmd = data_list[0]
                     sub_data = data_list[1:]
-                    
                     self._status  = cmd + ":" + sub_cmd
                     
                     if sub_cmd == "STAT":

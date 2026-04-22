@@ -51,10 +51,10 @@ class RF_Device_Client(QObject):
             
         elif param in ["f", "freq", "frequency"]:
             self.setFrequency(value, channel)
-            
-        elif param in ["ph", "phase"]:
+
+        elif param in ["h","ph", "phase"]:
             self.setPhase(value, channel)
-            
+
         elif param in ["maxp", "max_power"]:
             self.setMaxPower(value, channel)
             
