@@ -59,7 +59,6 @@ class ClientSocket(QTcpSocket):
     def sendMessage(self, msg):
         if not self.isOpen():
             return -1
-
         block = QByteArray()
         output = QDataStream(block, QIODevice.WriteOnly)
         output.setVersion(QDataStream.Qt_5_0)
@@ -72,7 +71,16 @@ class ClientSocket(QTcpSocket):
         output.device().seek(0)
         output.writeUInt16(block.size()-2)
 
-        self.write(block)
+        n = self.write(block)
+
+        # print("[TX] msg:", msg)
+        # print("[TX] block size:", block.size())
+        # print("[TX] payload size:", block.size() - 2)
+        # print("[TX] written:", n)
+        # print("[TX] bytesToWrite:", self.bytesToWrite())
+        
+        if n == -1:
+            print("[TX ERROR]", self.errorString())
 
     def receiveMessage(self):
 
@@ -91,7 +99,7 @@ class ClientSocket(QTcpSocket):
                 command = str(stream.readQString())     ### command of 3 or 4 characters
                 data = list(stream.readQVariantList())   ### data
                 self._block_size = 0
-                
+                # print('we receive msg, control:',control,',device:',device,',command:',command,',data:',data)
                 self._message_signal.emit([control, device, command, data])
                 self.my_data = [control, device, command, data]
 
