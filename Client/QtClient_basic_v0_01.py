@@ -77,12 +77,11 @@ class ClientSocket(QTcpSocket):
         # print("[TX] payload size:", block.size() - 2)
         # print("[TX] written:", n)
         # print("[TX] bytesToWrite:", self.bytesToWrite())
-<<<<<<< HEAD
-=======
+
         
         if n == -1:
             print("[TX ERROR]", self.errorString())
->>>>>>> 9da2aed3eb9ec70f172b2d6ea42d5ba47b5baf77
+
 
     def receiveMessage(self):
 
