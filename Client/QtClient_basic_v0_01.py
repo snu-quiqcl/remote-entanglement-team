@@ -102,10 +102,9 @@ class ClientSocket(QTcpSocket):
                 data = list(stream.readQVariantList())   ### data
                 # print('we receive msg, control:',control,',device:',device,',command:',command,',data:',data)
                 self._block_size = 0
-<<<<<<< HEAD
-=======
+
                 # print('we receive msg, control:',control,',device:',device,',command:',command,',data:',data)
->>>>>>> 9da2aed3eb9ec70f172b2d6ea42d5ba47b5baf77
+
                 self._message_signal.emit([control, device, command, data])
                 self.my_data = [control, device, command, data]
 
