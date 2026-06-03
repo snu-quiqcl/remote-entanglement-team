@@ -230,6 +230,7 @@ class MotorController(QObject):
             work = self.queue.get()
             self._status  = "running"
             # decompose the job
+            print("motor controller will do", work)
             work_type, command = work[:2]
             data = work[2]
             if work_type == "C":
@@ -237,6 +238,7 @@ class MotorController(QObject):
                     """
                     Successfully received a response from the server
                     """
+                    print('try connect to server')
                     self.remote_flag = True
                     status_list = []
                     for nick in data:
