@@ -354,35 +354,51 @@ class MotorController(QObject):
             self._motors[motor_nick].toWorkList("H")
             self._motors_under_homing.append(motor_nick)
     
-    def moveToPosition(self, motor_dict):
-        for motor_nick, target_position in motor_dict.items():
-            if motor_nick not in self._motors:
-                self._detectedError("Unknown motor: %s" % motor_nick)
-                continue
+    def moveToPosition(self, target_position):
+        print("[MH MOVE START]", self.nickname, "target=", target_position,
+              "current=", self.position,
+              "opened=", self._is_opened,
+              "motor=", self._motor)
     
-            motor = self._motors[motor_nick]
+        try:
+            self.status = "moving"
     
-            if ":" in motor_nick and self._remote_connection_state != "CONNECTED":
-                self._detectedError(
-                    "Remote motor is not connected yet: %s" % motor_nick
-                )
-                continue
+            target_position = float(target_position)
     
-            if hasattr(motor, "_is_opened") and not motor._is_opened:
-                self._detectedError(
-                    "Motor is not opened yet: %s" % motor_nick
-                )
-                continue
+            if target_position > 13:
+                target_position = 13
+            if target_position < 0:
+                target_position = 0
     
-            motor.setTargetPosition(target_position)
-            self._motors_under_request.append(motor_nick)
-            motor.toWorkList("M")
+            print("[MH MOVE CLIPPED]", self.nickname, target_position)
     
-        if len(self._motors_under_request) and not self.pos_checker.isActive():
-            self.pos_checker.start(qtimer_interval)
-
+            if self._motor is None:
+                raise RuntimeError("self._motor is None")
+    
+            if not target_position == self.position:
+                print("[MH BEFORE move_to_position]", self.nickname, target_position)
+                self._motor.move_to_position(target_position)
+                print("[MH AFTER move_to_position]", self.nickname)
+    
+            print("[MH BEFORE getPosition]", self.nickname)
+            self.position = self.getPosition()
+            print("[MH AFTER getPosition]", self.nickname, self.position)
+    
+            print("[MH BEFORE EMIT DONE]", self.nickname, self.position)
+            self._sig_motor_move_done.emit(self.nickname, self.position)
+            print("[MH AFTER EMIT DONE]", self.nickname, self.position)
+    
+        except Exception as e:
+            print("[MH MOVE ERROR]", self.nickname, repr(e))
+            self._sig_motor_error.emit(
+                "An error while moving motor %s. (%s)" % (self.nickname, e)
+            )
+    
+        finally:
+            self.status = "standby"
     @remote_control_wrapper
     def _completedMotorMoving(self, nick, position):
+        print("[MOVE DONE RECEIVED]", nick, position)
         motor_key = self._resolveMotorNick(nick)
     
         candidates = [nick]
