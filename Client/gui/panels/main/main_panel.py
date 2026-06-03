@@ -197,7 +197,7 @@ class MainPanel(QtWidgets.QMainWindow, main_ui, main_panel_theme_base):
         pre_defined_string = self.sequencer.replaceParameters(seq_file)
         
         fast_output_string = "s.set_output_port(hd.external_control_port, [%s])" % ",".join(output_port_list) if len(output_port_list) else ""
-        slow_output_string = "s.set_output_port(hd.external_control_port, [%s])" % ",".join(slow_port_list) if len(slow_port_list) else ""
+        slow_output_string = "s.set_output_port(hd.external_slow_port, [%s])" % ",".join(slow_port_list) if len(slow_port_list) else ""
 
         replace_string = fast_output_string + "\n" + slow_output_string
                 

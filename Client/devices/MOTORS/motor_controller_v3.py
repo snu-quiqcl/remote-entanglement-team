@@ -230,6 +230,7 @@ class MotorController(QObject):
             work = self.queue.get()
             self._status  = "running"
             # decompose the job
+            print("motor controller will do", work)
             work_type, command = work[:2]
             data = work[2]
             print("motor controller will do", work)
