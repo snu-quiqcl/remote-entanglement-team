@@ -287,14 +287,12 @@ class IndividualMotorGUI(QObject):
         self.isChecked = flag
         
     def initiatedMotor(self, nick):
-        print("[GUI SETTEXT] initiatedMotor", self.nickname, nick)
         self.setPositionTextFromMotor(self.motor.position)
     
     def erroredMotor(self, nick):
         self.changedStatus(self.nickname, "error")
     
     def movedMotor(self, nick, position):
-        print("[GUI SETTEXT] movedMotor", self.nickname, nick, position)
         self._editing_position = False
         self.setPositionTextFromMotor(self.motor.position, force=True)
     
@@ -303,9 +301,6 @@ class IndividualMotorGUI(QObject):
         self.Qposition.setText("0.000")
         
     def changedPosition(self, position):
-        print("[GUI SETTEXT] changedPosition", self.nickname, position,
-          "focus=", self.Qposition.hasFocus(),
-          "editing=", getattr(self, "_editing_position", None))
         self.setPositionTextFromMotor(position)
     
         self.Qposition.setText("%.3f" % position)
@@ -369,9 +364,6 @@ class IndividualMotorGUI(QObject):
                 self.Qconnect.setEnabled(False)
             
     def updateStatus(self):
-        print("[GUI SETTEXT] updateStatus", self.nickname,
-         self.motor.position, self.motor.status,
-         "editing=", getattr(self, "_editing_position", None))
         position = self.motor.position
         status = self.motor.status
     

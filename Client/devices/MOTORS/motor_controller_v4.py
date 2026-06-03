@@ -354,51 +354,80 @@ class MotorController(QObject):
             self._motors[motor_nick].toWorkList("H")
             self._motors_under_homing.append(motor_nick)
     
-    def moveToPosition(self, target_position):
-        print("[MH MOVE START]", self.nickname, "target=", target_position,
-              "current=", self.position,
-              "opened=", self._is_opened,
-              "motor=", self._motor)
+    def moveToPosition(self, motor_dict):
+        print("[CTRL moveToPosition ENTER]",
+              "user=", getattr(self, "user_name", "UNKNOWN"),
+              "motor_dict=", motor_dict)
     
-        try:
-            self.status = "moving"
+        for motor_nick, target_position in motor_dict.items():
+            print("[CTRL MOVE REQUEST]",
+                  "motor_nick=", motor_nick,
+                  "target=", target_position)
     
-            target_position = float(target_position)
+            print("[CTRL KNOWN MOTORS]", list(self._motors.keys()))
     
-            if target_position > 13:
-                target_position = 13
-            if target_position < 0:
-                target_position = 0
+            if motor_nick not in self._motors:
+                print("[CTRL MOVE FAIL] unknown motor:", motor_nick)
+                self._detectedError("Unknown motor: %s" % motor_nick)
+                continue
     
-            print("[MH MOVE CLIPPED]", self.nickname, target_position)
+            motor = self._motors[motor_nick]
     
-            if self._motor is None:
-                raise RuntimeError("self._motor is None")
+            print("[CTRL MOTOR SELECTED]",
+                  "motor_nick=", motor_nick,
+                  "motor_class=", type(motor).__name__,
+                  "motor_nickname=", getattr(motor, "nickname", None),
+                  "serial=", getattr(motor, "serial", None),
+                  "status=", getattr(motor, "status", None),
+                  "opened=", getattr(motor, "_is_opened", None),
+                  "isRunning=", motor.isRunning() if hasattr(motor, "isRunning") else None,
+                  "queue_size=", motor.queue.qsize() if hasattr(motor, "queue") else None)
     
-            if not target_position == self.position:
-                print("[MH BEFORE move_to_position]", self.nickname, target_position)
-                self._motor.move_to_position(target_position)
-                print("[MH AFTER move_to_position]", self.nickname)
+            if ":" in motor_nick and self._remote_connection_state != "CONNECTED":
+                print("[CTRL MOVE FAIL] remote not connected:",
+                      motor_nick,
+                      "remote_state=", self._remote_connection_state)
+                self._detectedError(
+                    "Remote motor is not connected yet: %s" % motor_nick
+                )
+                continue
     
-            print("[MH BEFORE getPosition]", self.nickname)
-            self.position = self.getPosition()
-            print("[MH AFTER getPosition]", self.nickname, self.position)
+            if hasattr(motor, "_is_opened") and not motor._is_opened:
+                print("[CTRL MOVE FAIL] motor not opened:", motor_nick)
+                self._detectedError(
+                    "Motor is not opened yet: %s" % motor_nick
+                )
+                continue
     
-            print("[MH BEFORE EMIT DONE]", self.nickname, self.position)
-            self._sig_motor_move_done.emit(self.nickname, self.position)
-            print("[MH AFTER EMIT DONE]", self.nickname, self.position)
+            motor.setTargetPosition(target_position)
     
-        except Exception as e:
-            print("[MH MOVE ERROR]", self.nickname, repr(e))
-            self._sig_motor_error.emit(
-                "An error while moving motor %s. (%s)" % (self.nickname, e)
-            )
+            print("[CTRL TARGET SET]",
+                  "motor_nick=", motor_nick,
+                  "target=", getattr(motor, "_target", None))
     
-        finally:
-            self.status = "standby"
+            self._motors_under_request.append(motor_nick)
+    
+            print("[CTRL REQUEST APPENDED]",
+                  "_motors_under_request=", self._motors_under_request)
+    
+            print("[CTRL BEFORE motor.toWorkList]",
+                  "motor_nick=", motor_nick,
+                  "cmd=M")
+    
+            motor.toWorkList("M")
+    
+            print("[CTRL AFTER motor.toWorkList]",
+                  "motor_nick=", motor_nick,
+                  "isRunning=", motor.isRunning() if hasattr(motor, "isRunning") else None,
+                  "queue_size=", motor.queue.qsize() if hasattr(motor, "queue") else None)
+    
+        if len(self._motors_under_request) and not self.pos_checker.isActive():
+            print("[CTRL POS CHECK START]",
+                  "_motors_under_request=", self._motors_under_request)
+            self.pos_checker.start(qtimer_interval)
+
     @remote_control_wrapper
     def _completedMotorMoving(self, nick, position):
-        print("[MOVE DONE RECEIVED]", nick, position)
         motor_key = self._resolveMotorNick(nick)
     
         candidates = [nick]
@@ -493,9 +522,27 @@ class MotorController(QObject):
             print(msg)
         
     def toWorkList(self, cmd):
+        print("[CTRL toWorkList ENTER]",
+              "user=", getattr(self, "user_name", "UNKNOWN"),
+              "cmd=", cmd,
+              "status=", getattr(self, "_status", None),
+              "queue_before=", self.queue.qsize())
+    
         self.queue.put(cmd)
+    
+        print("[CTRL toWorkList PUT]",
+              "user=", getattr(self, "user_name", "UNKNOWN"),
+              "cmd=", cmd,
+              "status=", getattr(self, "_status", None),
+              "queue_after=", self.queue.qsize())
+    
         if not self._status == "running":
+            print("[CTRL RUN CALL]",
+                  "user=", getattr(self, "user_name", "UNKNOWN"))
             self.run()
+        else:
+            print("[CTRL ALREADY RUNNING]",
+                  "user=", getattr(self, "user_name", "UNKNOWN"))
             
     def run(self):
         while self.queue.qsize():

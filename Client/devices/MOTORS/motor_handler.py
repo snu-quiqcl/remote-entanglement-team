@@ -116,16 +116,34 @@ class MotorHandler(QThread):
             self._sig_motor_error.emit("An error while loading a motor %s.(%s)" % (self.nickname, e))
 
     def moveToPosition(self, target_position):
+        print("[MH MOVE ENTER]",
+              self.nickname,
+              "target=", target_position,
+              "current=", self.position,
+              "opened=", self._is_opened,
+              "motor=", self._motor)
+    
         self.status = "moving"
+    
         if target_position > 13:
             target_position = 13
         if target_position < 0:
             target_position = 0
-        
+    
+        print("[MH MOVE CLIPPED]", self.nickname, target_position)
+    
         if not target_position == self.position:
+            print("[MH BEFORE DEVICE MOVE]", self.nickname, target_position)
             self._motor.move_to_position(target_position)
+            print("[MH AFTER DEVICE MOVE]", self.nickname)
+    
+        print("[MH BEFORE GETPOS]", self.nickname)
         self.position = self.getPosition()
+        print("[MH AFTER GETPOS]", self.nickname, self.position)
+    
+        print("[MH BEFORE DONE EMIT]", self.nickname, self.position)
         self._sig_motor_move_done.emit(self.nickname, self.position)
+        print("[MH AFTER DONE EMIT]", self.nickname, self.position)
         
     def forceHome(self):
         self.status = "homing"
