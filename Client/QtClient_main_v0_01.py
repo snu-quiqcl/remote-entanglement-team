@@ -97,7 +97,7 @@ class ClientMain(QObject):
             if device.lower() in self.device_dict.keys():
                 self.device_dict[device.lower()].toWorkList(msg_list)
             else:                    
-                print("No such device is in o8ur device dict! (%s)." % device)
+                print("No such device is in our device dict! (%s)." % device)
         
         else:
             if not self.gui == None:

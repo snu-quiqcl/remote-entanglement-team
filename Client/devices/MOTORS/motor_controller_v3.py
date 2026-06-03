@@ -226,17 +226,19 @@ class MotorController(QObject):
             
     def run(self):
         while self.queue.qsize():
-            print("queue size", self.queue.qsize())
+            #print("queue size", self.queue.qsize())
             work = self.queue.get()
             self._status  = "running"
             # decompose the job
             work_type, command = work[:2]
             data = work[2]
+            print("motor controller will do", work)
             if work_type == "C":
                 if command == "CON":
                     """
                     Successfully received a response from the server
                     """
+                    print('try connect to server')
                     self.remote_flag = True
                     status_list = []
                     for nick in data:

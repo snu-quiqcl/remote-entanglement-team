@@ -59,11 +59,9 @@ class ClientSocket(QTcpSocket):
     def sendMessage(self, msg):
         if not self.isOpen():
             return -1
-
         block = QByteArray()
         output = QDataStream(block, QIODevice.WriteOnly)
         output.setVersion(QDataStream.Qt_5_0)
-
         output.writeUInt16(0)
         output.writeQString(msg[0])         ### flag C/S
         output.writeQString(msg[1])         ### device; 3 ~ 4 charaters
@@ -72,7 +70,13 @@ class ClientSocket(QTcpSocket):
         output.device().seek(0)
         output.writeUInt16(block.size()-2)
 
-        self.write(block)
+        n = self.write(block)
+
+        # print("[TX] msg:", msg)
+        # print("[TX] block size:", block.size())
+        # print("[TX] payload size:", block.size() - 2)
+        # print("[TX] written:", n)
+        # print("[TX] bytesToWrite:", self.bytesToWrite())
 
     def receiveMessage(self):
 
@@ -90,13 +94,15 @@ class ClientSocket(QTcpSocket):
                 device  = str(stream.readQString())     ### command of 3 or 4 characters
                 command = str(stream.readQString())     ### command of 3 or 4 characters
                 data = list(stream.readQVariantList())   ### data
+                # print('we receive msg, control:',control,',device:',device,',command:',command,',data:',data)
                 self._block_size = 0
-                
                 self._message_signal.emit([control, device, command, data])
                 self.my_data = [control, device, command, data]
 
-            except:
-                pass
+            except Exception as e:
+                print("Packet parse error:", e)
+                self._block_size = 0
+                return
 
 
 # if __name__ == "__main__":

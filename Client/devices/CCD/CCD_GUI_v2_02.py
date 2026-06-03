@@ -400,6 +400,9 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
     def ChangeOvenThreshold(self):
         try:
             oven_thres = int(self.STATUS_OVEN_THRES.text())
+            if oven_thres < 70:
+                oven_thres = 70
+                self.STATUS_OVEN_THRES.setText(str(70))
             self.oven_thres = oven_thres
             print(self.oven_thres)
         except:
@@ -409,6 +412,7 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
         try:
             TION = int(self.STATUS_TION.text())
             self.target_nion = TION
+            print(self.target_nion)
         except:
             self.STATUS_TION.setText(str(self.target_nion))
         
@@ -471,7 +475,7 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
                     pass
                     
                 cur_nion = len(self.spot_contours)
-                self.STATUS_NION.setText(str(cur_nion))                     
+                self.STATUS_NION.setText(str(cur_nion))      
                 if cur_nion >= self.target_nion and self._oven_on:
                     self.oc.HeaterON(on_flag=False)
                     self._oven_on = False

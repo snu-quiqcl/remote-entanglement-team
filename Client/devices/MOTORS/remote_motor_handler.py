@@ -42,8 +42,10 @@ class RemoteMotorHandler(QThread):
         
         self.serial = "remote"
                 
-        if self.socket.socket.isOpen():
-            self.updateStatus()
+    # Do not communicate with the server during object construction.
+    # Remote connection should be explicitly requested by GUI/controller.
+    # if self.socket.socket.isOpen():
+    #     self.updateStatus()
         
     @property
     def owner(self):
@@ -68,6 +70,11 @@ class RemoteMotorHandler(QThread):
     
     @nickname.setter
     def nickname(self, nick):
+        # Remote motor nickname should be local nickname only.
+        # Example: "EC:px" -> "px"
+        if isinstance(nick, str) and ":" in nick:
+            nick = nick.split(":")[-1]
+    
         self._nickname = nick
         
     @property
@@ -92,7 +99,8 @@ class RemoteMotorHandler(QThread):
     def updateStatus(self):
         msg = ["C", "%s:MOTORS" % self.owner, "CON", [self.nickname]]
         self.toSocket(msg)
-        
+    def connectRemote(self):
+        self.updateStatus()    
     def getPosition(self):
         return self.position
     
@@ -131,20 +139,22 @@ class RemoteMotorHandler(QThread):
         while self.queue.qsize():
             work = self.queue.get()
             
-            if work == "O": # Open device
+            if work == "O":  # Open device
+                self.status = "initiating"
                 self.openDevice()
-                
-            elif work == "M": # Move position
+            
+            elif work == "M":  # Move position
+                self.status = "moving"
                 self.moveToPosition(self._target)
-                                
-            elif work == "H": # Homing
+            
+            elif work == "H":  # Homing
+                self.status = "homing"
                 self.forceHome()
-                
-            elif work == "Q": # Get position
+            
+            elif work == "Q":  # Get position
                 self.getPosition()
-                
-            elif work == "D": # Disconnect
+            
+            elif work == "D":  # Disconnect
+                self.status = "closed"
                 self.closeDevice()
                 return
-
-            self.status = "standby"
