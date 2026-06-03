@@ -400,6 +400,9 @@ class CCD_UI(QtWidgets.QMainWindow, CCD_UI_base, Ui_Form):
     def ChangeOvenThreshold(self):
         try:
             oven_thres = int(self.STATUS_OVEN_THRES.text())
+            if oven_thres < 70:
+                oven_thres = 70
+                self.STATUS_OVEN_THRES.setText(str(70))
             self.oven_thres = oven_thres
             print(self.oven_thres)
         except:
