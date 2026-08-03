@@ -81,6 +81,29 @@ class MeasurePanel(QtWidgets.QMainWindow, main_ui, measure_panel_theme_base):
                 self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_OPEN.png'))
             self.BTN_mirror_left.setIconSize(QSize(200,150))
             self.BTN_mirror_right.setIconSize(QSize(200,150))
+        elif "MIRA" in nickname.upper():
+            if "EA" in nickname.upper():
+                self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/MIRA_to_ion.png'))
+                self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRA_from_ion.png'))
+            elif "EC" in nickname.upper():
+                self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/MIRA_to_ion.png'))
+                self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRA_from_ion.png'))
+            self.BTN_mirror_left.setIconSize(QSize(200,150))
+            self.BTN_mirror_right.setIconSize(QSize(200,150))
+        elif "PMT" in nickname.upper():
+            if "EA" in nickname.upper():
+                self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/to_CCD.png'))
+                self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/to_PMT.png'))
+            elif "EC" in nickname.upper():
+                self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/to_PMT.png'))
+                self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/to_CCD.png'))
+            self.BTN_mirror_left.setIconSize(QSize(200,150))
+            self.BTN_mirror_right.setIconSize(QSize(200,150))
+        elif "399_FLIP" in nickname.upper():
+            self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/EC.png'))
+            self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/EA.png'))
+            self.BTN_mirror_left.setIconSize(QSize(200,150))
+            self.BTN_mirror_right.setIconSize(QSize(200,150))
         else:
             self.BTN_mirror_left.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_LEFT.png'))
             self.BTN_mirror_right.setIcon(QtGui.QIcon(dirname + '/icons/MIRROR_RIGHT.png'))            

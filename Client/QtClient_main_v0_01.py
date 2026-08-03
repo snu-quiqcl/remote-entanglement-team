@@ -109,8 +109,10 @@ if __name__ == "__main__":
     client = ClientMain()
     if not client.gui == None:
         client.gui.show()
-    app.exec_()
-    sys.exit(app.exec())
+    try:
+        sys.exit(app.exec())
+    finally:
+        client.socket.breakConnection()
     # print(client.socket.makeConnection(client.IP, client.PORT))
 # client.socket.sendMessage(["C", "DAC", "ON", []])
 # client.socket.sendMessage(["C", "DAC", "SETV", [0, 0.3, 1, -4, 2, -0.7, 12, 8]])
