@@ -11,7 +11,7 @@ from HardwareDefinition_v4_01 import *
 
 # Input port pin mapping
 # For input pin, there will be only one driver
-input_mapping = {'jb_0': 'PMT', 'jb_2': 'PMT2', 'jb_4': 'PMT3', 'jb_6':'PMT4', 'ja_2": DUM}
+input_mapping = {'jb_0': 'PMT', 'jb_2': 'PMT2', 'jb_4': 'PMT3', 'jb_6':'PMT4', 'ja_2"': 'DUM'}
 
 # Output port pin mapping
 # For output pin, there might be more than one device controlled by the output pin
