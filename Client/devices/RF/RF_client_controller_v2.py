@@ -63,7 +63,6 @@ class RF_ClientInterface(QThread):
     def buildRF_Device(self, dev_nick, data_list):
         num_channels = len(data_list)
         RF_dev = RF_Device_Client(self, dev_nick, num_channels)
-        
         for channel, data in enumerate(data_list):
             for param, value in zip(data[::2], data[1::2]):
                 RF_dev.setValue(param, value, channel)
@@ -205,7 +204,6 @@ class RF_ClientInterface(QThread):
                     """
                     self._status  = "HELO"
                     self.isOpened = True
-                    self._gui_update_signal.emit("RF", "CON", [])
 
                     dev_nick_list = data_list[0::3]
                     dev_type_list = data_list[1::3]
@@ -214,13 +212,14 @@ class RF_ClientInterface(QThread):
                     for dev_nick, dev_type, dev_conn in zip(dev_nick_list, dev_type_list, dev_conn_list):
                         self.buildRF_Device(dev_nick, dev_type)
                         self.RF_dict[dev_nick].isConnected = dev_conn
+                    
+                    self._gui_update_signal.emit("RF", "CON", [])
                         
                 elif cmd == "DCN":
                     self._gui_update_signal.emit("RF", "DCN", [])
                     print("disconnected")
                     
                 elif cmd in self.RF_dict.keys():
-
                     sub_cmd = data_list[0]
                     sub_data = data_list[1:]
                     self._status  = cmd + ":" + sub_cmd
@@ -228,9 +227,11 @@ class RF_ClientInterface(QThread):
                     if sub_cmd == "STAT":
                         self.RF_dict[cmd].setupDevice(len(sub_data))
                         for ch, parameters in enumerate(sub_data):
-                            for param, value in zip(parameters[::2], parameters[1::2]):
-                                if value:
+                            for param, value in zip(parameters[::2], parameters[1::2]):   
+                                # if value:
+                                if value is not None:
                                     self.RF_dict[cmd].setValue(param, value, ch)
+
                         self._gui_update_signal.emit(cmd, "STAT", [])
                         
                     elif sub_cmd == "ON":

@@ -157,8 +157,8 @@ class RF_ChannelWidget(QtWidgets.QWidget, channel_ui):
                     print("An error ['%s'] occured while handling ['%s']." % (err, func.__name__))
         return wrapper
     
-    
     def __init__(self, parent=None, device_name="", device_settings=None, config=None, theme="black"):
+        
         QtWidgets.QWidget.__init__(self)
         self.main_gui = parent
         self.device_name = device_name
@@ -353,8 +353,8 @@ class RF_ChannelWidget(QtWidgets.QWidget, channel_ui):
 
     def updateGUI(self, cmd:str, data=[]):
         if cmd == "STAT":
-            self.updateAllParameters()
             self.readConfig()
+            self.updateAllParameters()
         elif cmd in ["c", "con"]:
             flag = data[0]
             self.BTN_connect.setChecked(flag)
@@ -567,7 +567,7 @@ class RF_ChannelWidget(QtWidgets.QWidget, channel_ui):
         ch = self.device_channel
         min_power_dbm = self.device.settings[ch]["min_power"]
         max_power_dbm = self.device.settings[ch]["max_power"]
-        
+                
         min_power_vpp = self.dBm_to_vpp(min_power_dbm)
         max_power_vpp = self.dBm_to_vpp(max_power_dbm)
         
