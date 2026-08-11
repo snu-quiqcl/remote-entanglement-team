@@ -5,7 +5,7 @@ A module for simulating KDC101 motor device.
 @email: jhjeong32@snu.ac.kr
 """
 import time
-from threading import Thread
+from threading import Event, Thread
 import numpy as np
 
 class DummyKDC101:
@@ -46,6 +46,8 @@ class DummyKDC101:
         """
         self.serno = serno
         self.position = np.random.random(1)[0]*12
+        self._stop_event = Event()
+        self._motion_completed = True
 
 
     def get_position(self):
@@ -202,12 +204,14 @@ class DummyKDC101:
         if verbose:
             self.print_msg("start homing...")
 
+        self._stop_event.clear()
+        self._motion_completed = False
         pos_thread = Thread(target=self._moving_simulation, args=(self.position, 0))
         pos_thread.daemon = False
         pos_thread.start()
         pos_thread.join()
         
-        return True
+        return self._motion_completed
 
     def move_to_position(self, pos, in_devunit=False, verbose=False):
         """Moves the motor to the certain position.
@@ -229,12 +233,14 @@ class DummyKDC101:
             raise ValueError ("The position must be positive.")
             return
         
+        self._stop_event.clear()
+        self._motion_completed = False
         pos_thread = Thread(target=self._moving_simulation, args=(self.position, pos))
         pos_thread.daemon = False
         pos_thread.start()
         pos_thread.join()
         
-        return True
+        return self._motion_completed
     
 
     def move_relative(self, disp, in_devunit=False, verbose=False):
@@ -258,16 +264,20 @@ class DummyKDC101:
     def stop_profiled(self):
         """Stop the device with its motion profile.
         """
-        pass
+        self._stop_event.set()
     
     def _moving_simulation(self, cur_pos, tar_pos, velocity=0.05):
         position_list = np.arange(cur_pos, tar_pos, (-1)**(cur_pos > tar_pos)*velocity)
         
         for pos in position_list:
+            if self._stop_event.is_set():
+                self._motion_completed = False
+                return False
             self.position = pos
             time.sleep(0.05)
         self.position = tar_pos
-        return
+        self._motion_completed = True
+        return True
 
 
 

@@ -28,17 +28,19 @@ def load_dll(dll_path='C:/Program Files/Thorlabs/Kinesis'):
         # save the current working directory
         cwd = getcwd()
 
-        # change the working directory to 'here' and load the DLL
-        chdir(dll_path)
+        # Loading a dependency can fail even when the Kinesis directory
+        # exists.  Always restore the caller's working directory so a failed
+        # hardware probe cannot break later relative config/UI paths.
         try:
-            lib = cdll.LoadLibrary("Thorlabs.MotionControl.KCube.DCServo.dll")
-        except:
-            lib = cdll.LoadLibrary(dll_path + "/Thorlabs.MotionControl.KCube.DCServo.dll")
-
-        # restore the original working directory
-        chdir(cwd)
-
-        return lib
+            chdir(dll_path)
+            try:
+                return cdll.LoadLibrary("Thorlabs.MotionControl.KCube.DCServo.dll")
+            except OSError:
+                return cdll.LoadLibrary(
+                    dll_path + "/Thorlabs.MotionControl.KCube.DCServo.dll"
+                )
+        finally:
+            chdir(cwd)
 
 class KDC101:
     """

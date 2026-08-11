@@ -33,9 +33,12 @@ class ClientMain(QObject):
     
     ccd_cnt = 0
 
-    def __init__(self, gui=True):
+    def __init__(self, gui=True, config_path=None):
         super().__init__()
-        self._readConfig()
+        self._shutting_down = False
+        self.device_dict = {}
+        self.gui = None
+        self._readConfig(config_path)
         self.socket = ClientSocket(self, self.user_name)
         self.socket._message_signal.connect(self.receivedMessage)
         self._msg_queue = Queue()
@@ -49,17 +52,23 @@ class ClientMain(QObject):
         
         self._fire_signal.connect(self.manageMessageQue)
         
-    def _readConfig(self):
-        PC_name = os.getenv('COMPUTERNAME', 'defaultValue')
-        config_file = dirname + '/config/%s.ini' % PC_name
-        # import os
+    def _readConfig(self, config_path=None):
+        configured = config_path or os.getenv("QTCLIENT_CONFIG", "").strip()
+        if configured:
+            config_file = os.path.abspath(configured)
+        else:
+            PC_name = os.getenv('COMPUTERNAME', 'defaultValue')
+            config_file = os.path.join(dirname, 'config', '%s.ini' % PC_name)
         if not os.path.isfile(config_file):
-            from shutil import copyfile
-            copyfile(dirname + "/config/default.ini", config_file)
-            
-        
+            raise FileNotFoundError(
+                "Client configuration not found: %s. Pass EA.ini/EC.ini as "
+                "the first argument or set QTCLIENT_CONFIG." % config_file
+            )
+
         self.cp = ConfigParser()
-        self.cp.read(config_file)
+        loaded = self.cp.read(config_file)
+        if not loaded:
+            raise RuntimeError("Could not read client configuration: %s" % config_file)
         
         self.IP = self.cp.get("win_server", "ip")
         self.PORT = int(self.cp.get("win_server", "port"))
@@ -92,6 +101,16 @@ class ClientMain(QObject):
     def receivedMessage(self, msg_list):
         device = msg_list.pop(1)
         if not device == "SRV":
+            motor_server_mode = self.cp.get(
+                "motor_server", "mode", fallback="legacy"
+            ).strip().lower()
+            if (
+                motor_server_mode == "standalone"
+                and device.rsplit(":", 1)[-1].upper() == "MOTORS"
+            ):
+                print("[MOTOR] Ignored legacy DDS MOTOR message:", msg_list)
+                return
+
             if ":" in device.lower(): # For remote control
                 device = device.split(":")[1]
                 
@@ -104,10 +123,26 @@ class ClientMain(QObject):
             if not self.gui == None:
                 self._gui_signal.emit(msg_list)
 
+    def shutdown(self):
+        if self._shutting_down:
+            return
+        self._shutting_down = True
+        for device, controller in list(self.device_dict.items()):
+            try:
+                if hasattr(controller, "shutdown"):
+                    controller.shutdown()
+                elif hasattr(controller, "closeDevice"):
+                    controller.closeDevice()
+            except Exception as err:
+                print("An error while closing '%s', (%s)" % (device, err))
+        if self.socket.isOpen():
+            self.socket.breakConnection(True)
+
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    client = ClientMain()
+    selected_config = sys.argv[1] if len(sys.argv) > 1 else None
+    client = ClientMain(config_path=selected_config)
     if not client.gui == None:
         client.gui.show()
     # app.exec_()

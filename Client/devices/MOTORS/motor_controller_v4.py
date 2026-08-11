@@ -1,799 +1,838 @@
-"""
-Created on Sun Nov 21 2021
-@author: Junho Jeong
-"""
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer, QThread#, pyqtSlot
-from motor_handler import MotorHandler
-from remote_motor_handler import RemoteMotorHandler
-from queue import Queue
-version = "3.1"
-qtimer_interval = 100 # ms
+"""Motor controller facade backed by the standalone Motor Server."""
+
+import math
+
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+
+try:
+    from .motor_handler import MotorHandler
+    from .remote_motor_handler import RemoteMotorHandler
+    from .motor_transport import MotorTransport
+except (ImportError, ValueError):
+    # The legacy application adds devices/MOTORS directly to sys.path.
+    from motor_handler import MotorHandler
+    from remote_motor_handler import RemoteMotorHandler
+    from motor_transport import MotorTransport
+
+
+version = "4.0"
+qtimer_interval = 250
+
 
 class MotorController(QObject):
+    """Own local motor workers and remote motor proxies.
+
+    DDS/RF continue to use the legacy client socket, but MOTOR traffic never
+    does.  Local motor calls remain available when the Motor Server is offline.
     """
-    The controller class uses QThread class as a base, handling commands and the device is done by QThread.
-    This avoids being delayed by the main thread's task.
-    
-    The logger decorate automatically record the exceptions when a bug happens.
-    """
-    
+
     _sig_motors_initialized = pyqtSignal(int, str)
     _sig_motors_positions = pyqtSignal(dict)
-    _sig_remote_control = pyqtSignal()
-    
-    
-    def remote_control_wrapper(func):
-        def wrapper(self, *args):
-    
-            # If this function is called while handling data received from remote,
-            # do not send another socket message.
-            if getattr(self, "_handling_remote_data", False):
-                return func(self, *args)
-    
-            if self.remote_flag:
-                if func.__name__ == "_initializedMotor":
-                    nick = args[0]
-                    full_nick = self._fullMotorNick(nick)
-                    msg = ["D", "%s:MOTORS" % self.user_name, "INITED", [full_nick]]
-                    self.toSocket(msg)
-    
-                elif func.__name__ == "_homedMotor":
-                    nick = args[0]
-                    full_nick = self._fullMotorNick(nick)
-                    msg = ["D", "%s:MOTORS" % self.user_name, "HOMED", [full_nick]]
-                    self.toSocket(msg)
-    
-                elif func.__name__ == "_detectedError":
-                    error_message = args[0] if len(args) else "Unknown error"
-    
-                    if getattr(self, "_handling_remote_error", False):
-                        return func(self, *args)
-    
-                    sender = self.sender()
-    
-                    if sender is None or not hasattr(sender, "nickname"):
-                        return func(self, *args)
-    
-                    nick = sender.nickname
-                    full_nick = self._fullMotorNick(nick)
-                    msg = ["E", "%s:MOTORS" % self.user_name, full_nick, [error_message]]
-                    self.toSocket(msg)
-    
-                elif func.__name__ == "_completedMotorMoving":
-                    nick, position = args
-                    full_nick = self._fullMotorNick(nick)
-                    msg = ["D", "%s:MOTORS" % self.user_name, "MOVED", [full_nick, position]]
-                    self.toSocket(msg)
-    
-                else:
-                    self._detectedError("Un unknown function has been detected.(%s)" % func.__name__)
-    
-            return func(self, *args)
-    
-        return wrapper
+    _sig_remote_control = pyqtSignal()  # Legacy signal kept for compatibility.
+    _sig_transport_connection = pyqtSignal(bool, str)
+    _sig_transport_ready = pyqtSignal(bool)
 
-    
-    def __init__(self, socket=None, gui=None):  # cp is ConfigParser class
+    _SUPPORTED_ACTIONS = frozenset(
+        ("status", "open", "move", "home", "close", "stop")
+    )
+    _BUSY_STATES = frozenset(("initiating", "moving", "homing"))
+
+    def __init__(self, socket=None, gui=None):
         super().__init__()
-        self.sck = socket # parent
-        self.cp = self.sck.cp
+        if socket is None or not hasattr(socket, "cp"):
+            raise ValueError("MotorController requires a parent with a .cp config parser.")
+
+        # Retain this reference only for config/lifecycle compatibility.  It is
+        # never used to send motor messages.
+        self.sck = socket
+        self.cp = socket.cp
         self.gui = gui
-        
         self._status = "standby"
-        self._motors = {}
         self._is_opened = False
         self._gui_opened = False
+        self._shutting_down = False
+        self._transport_ready = False
+        self._transport_connected = False
+        self._transport_reason = "not connected"
+        self._motors = {}
+        self._local_motor_keys = set()
+        self._remote_motor_keys = set()
+        self._remote_motor_owners = {}
         self._motors_under_request = []
-        self._motors_under_homing  = []
+        self._motors_under_homing = []
         self._motors_under_loading = []
-        self._handling_remote_error = False
-        self._handling_remote_data = False
-        # Remote motor connection state
-        self._remote_motor_owners = {}          # {"sz": ["x", "y"], ...}
-        self._remote_connection_state = "DISCONNECTED"
-        self._remote_connecting_owners = set()
-        self._remote_connected_owners = set()
-        self._remote_connecting_motors = set()
-        
-        self.remote_connect_timer = QTimer()
-        self.remote_connect_timer.setSingleShot(True)
-        self.remote_connect_timer.timeout.connect(self._onRemoteConnectTimeout)
-        # Setting motor initiator
-        self.device = self.cp.get("device", "motors")
+        self._pending_local = {}       # local id -> inbound execute context
+        self._pending_remote = {}      # request id -> target/action
+
+        self.user_name = self.cp.get("client", "nickname").strip()
+        self.device = self.cp.get("device", "motors", fallback="MOTORS")
         self._motors = self._getMotorDictToLoad()
-        
-        self.pos_checker = QTimer() # This emits position signals of currently moving motors in 0.5s interval.
+
+        self.pos_checker = QTimer(self)
         self.pos_checker.setSingleShot(True)
         self.pos_checker.timeout.connect(self.checkPositionsUnderMoving)
-        
-        print("Motor Controller v%s" % version)
-        
-        # For remote control
-        self._client_list = []
-        self.queue = Queue()
-        self.remote_flag = False
-        self.message_thread = QThread()
-        self._sig_remote_control.connect(self.run)
-        
+
+        local_inventory = []
+        for nick in sorted(self._local_motor_keys):
+            motor = self._motors[nick]
+            local_inventory.append({
+                "id": nick,
+                "min": motor.position_min,
+                "max": motor.position_max,
+            })
+
+        configured_client_id = self.cp.get(
+            "motor_server", "client_id", fallback=self.user_name
+        ).strip()
+        if configured_client_id != self.user_name:
+            raise ValueError(
+                "[motor_server] client_id must match [client] nickname "
+                "for exact motor ownership routing."
+            )
+        self.motor_client_id = configured_client_id
+        self.transport = MotorTransport(
+            self.cp,
+            configured_client_id,
+            local_inventory,
+            sorted(self._remote_motor_keys),
+            parent=self,
+            auto_connect=True,
+        )
+        # Alias helps external diagnostics migrate without knowing the internal
+        # attribute selected for this version.
+        self.motor_transport = self.transport
+        self.transport.message_received.connect(self._onTransportMessage)
+        self.transport.connection_changed.connect(self._onTransportConnection)
+        self.transport.ready_changed.connect(self._onTransportReady)
+        self.transport.protocol_error.connect(self._onProtocolError)
+
+        print("Motor Controller v%s (%s)" % (version, self.user_name))
+
+    def _config_float(self, options, fallback):
+        for option in options:
+            if self.cp.has_option("motors", option):
+                try:
+                    value = float(self.cp.get("motors", option))
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(value):
+                    return value
+        return float(fallback)
+
+    def _motorBounds(self, nickname):
+        lower = self._config_float(
+            (nickname + "_min", nickname + "_position_min", "position_min"),
+            0.0,
+        )
+        upper = self._config_float(
+            (nickname + "_max", nickname + "_position_max", "position_max"),
+            13.0,
+        )
+        if lower > upper:
+            self._detectedError(
+                "Invalid bounds for %s; using [0, 13]." % nickname
+            )
+            return 0.0, 13.0
+        return lower, upper
+
+    def _getMotorDictToLoad(self):
+        motor_dict = {}
+        motor_type = self.cp.get("motors", "motor_type", fallback="Dummy")
+        for option in self.cp.options("motors"):
+            if option.endswith("_serno"):
+                nickname = option[:-6]
+                serial = self.cp.get("motors", option)
+                lower, upper = self._motorBounds(nickname)
+                motor = MotorHandler(
+                    self,
+                    serial,
+                    dev_type=motor_type,
+                    nick=nickname,
+                    position_min=lower,
+                    position_max=upper,
+                )
+                self._connectLocalMotor(motor)
+                motor_dict[nickname] = motor
+                self._local_motor_keys.add(nickname)
+            elif option.endswith("_owner"):
+                nickname = option[:-6]
+                owner = self.cp.get("motors", option).strip()
+                canonical = "%s:%s" % (owner, nickname)
+                motor = RemoteMotorHandler(self, owner, "remote", nickname)
+                self._connectRemoteMotor(motor)
+                motor_dict[canonical] = motor
+                self._remote_motor_keys.add(canonical)
+                self._remote_motor_owners.setdefault(owner, []).append(nickname)
+        return motor_dict
+
+    def _connectLocalMotor(self, motor):
+        motor._sig_motor_initialized.connect(self._initializedMotor)
+        motor._sig_motor_move_done.connect(self._completedMotorMoving)
+        motor._sig_motor_error.connect(self._detectedError)
+        motor._sig_motor_homed.connect(self._homedMotor)
+        motor._sig_motor_changed_position.connect(self._localPositionChanged)
+        motor._sig_motors_changed_status.connect(self._localStatusChanged)
+        motor._sig_motor_command_finished.connect(self._localCommandFinished)
+        motor._sig_motor_command_error.connect(self._localCommandError)
+
+    def _connectRemoteMotor(self, motor):
+        motor._sig_motor_initialized.connect(self._initializedMotor)
+        motor._sig_motor_move_done.connect(self._completedMotorMoving)
+        motor._sig_motor_error.connect(self._detectedError)
+        motor._sig_motor_homed.connect(self._homedMotor)
+        motor._sig_motor_changed_position.connect(self._remotePositionChanged)
+
+    def _addMotor(self, serno, dev_type, nickname):
+        lower, upper = self._motorBounds(nickname)
+        motor = MotorHandler(
+            self, serno, dev_type, nickname, lower, upper
+        )
+        self._connectLocalMotor(motor)
+        return motor
+
+    def _addRemoteMotor(self, owner, dev_type, nickname):
+        motor = RemoteMotorHandler(self, owner, dev_type, nickname)
+        self._connectRemoteMotor(motor)
+        return motor
+
+    def addMotor(self, serno_or_owner, dev_type, nickname, remote_flag=0):
+        if remote_flag:
+            canonical = "%s:%s" % (serno_or_owner, nickname)
+            if canonical in self._motors:
+                raise ValueError("Motor already exists: %s" % canonical)
+            self._motors[canonical] = self._addRemoteMotor(
+                serno_or_owner, dev_type, nickname
+            )
+            self._remote_motor_keys.add(canonical)
+            self._remote_motor_owners.setdefault(serno_or_owner, []).append(nickname)
+            self.transport.subscribe([canonical])
+        else:
+            # Runtime inventory mutation cannot safely alter an authenticated
+            # registration; require restart after changing local hardware.
+            raise RuntimeError(
+                "Adding a local motor at runtime is unsupported; update config and restart."
+            )
+
+    def _removeMotor(self, nickname):
+        motor_key = self._resolveMotorNick(nickname)
+        if motor_key is None:
+            return
+        motor = self._motors.pop(motor_key)
+        if motor_key in self._remote_motor_keys:
+            self.transport.unsubscribe([motor_key])
+            self._remote_motor_keys.discard(motor_key)
+        else:
+            motor.shutdown()
+            self._local_motor_keys.discard(motor_key)
+
+    def _fullMotorNick(self, nick):
+        if isinstance(nick, str) and nick.count(":") == 1:
+            return nick
+        return "%s:%s" % (self.user_name, nick)
+
+    def _resolveMotorNick(self, nick):
+        """Resolve only exact keys or this client's own canonical local key."""
+        if not isinstance(nick, str):
+            return None
+        nick = nick.strip()
+        if nick in self._motors:
+            return nick
+        if nick.count(":") == 1:
+            owner, local_nick = nick.split(":", 1)
+            if owner == self.user_name and local_nick in self._local_motor_keys:
+                return local_nick
+        return None
+
+    def _localFromExecuteTarget(self, message):
+        canonical = message.get("canonical_target")
+        target = message.get("target")
+        if isinstance(canonical, str) and canonical.count(":") == 1:
+            owner, local_nick = canonical.split(":", 1)
+            if owner != self.user_name:
+                return None
+            if target is not None and target != local_nick:
+                return None
+            return local_nick if local_nick in self._local_motor_keys else None
+        # A server execute must be canonicalized; never turn OTHER:px into px.
+        return None
+
     def openGui(self):
-        from Motor_Controller_GUI_v4 import MotorController_GUI
+        try:
+            from .Motor_Controller_GUI_v4 import MotorController_GUI
+        except (ImportError, ValueError):
+            from Motor_Controller_GUI_v4 import MotorController_GUI
         self.gui = MotorController_GUI(controller=self)
         self._gui_opened = True
 
-    def _receiveMotors(self, motor_dict):
-        for nickname, motor in self._motors.items():
-            self._positions[nickname] = motor.position
-            
-    def _getMotorDictToLoad(self):
-        motor_dict = {}
-        mtype = self.cp.get("motors", "motor_type")
-        self.user_name = self.cp.get("client", "nickname")
-    
-        for option in self.cp.options("motors"):
-            if "_serno" in option:
-                nickname = option[:option.find("_serno")]
-                serno = self.cp.get("motors", option)
-    
-                motor_dict[nickname] = self._addMotor(serno, mtype, nickname)
-    
-            elif "_owner" in option:
-                nickname = option[:option.find("_owner")]
-                owner = self.cp.get("motors", option)
-    
-                if owner not in self._remote_motor_owners:
-                    self._remote_motor_owners[owner] = []
-    
-                if nickname not in self._remote_motor_owners[owner]:
-                    self._remote_motor_owners[owner].append(nickname)
-    
-                full_nick = "%s:%s" % (owner, nickname)
-    
-                # Create the remote motor instance now,
-                # but do not connect to the server here.
-                motor_dict[full_nick] = self._addRemoteMotor(
-                    owner,
-                    "remote",
-                    nickname
-                )
-    
-                print("[MOTOR] remote motor instance created but not connected:",
-                      full_nick)
-    
-        return motor_dict
-    def _fullMotorNick(self, nick):
-        if isinstance(nick, str) and ":" in nick:
-            return nick
-        return "%s:%s" % (self.user_name, nick)
-    def _resolveMotorNick(self, nick):
-        """
-        Return the key used in self._motors.
-    
-        Examples:
-            "pz"    -> "pz" if local motor exists
-            "EC:pz" -> "EC:pz" if remote motor exists
-            "EC:pz" -> "pz" if this client is the owner side
-        """
-        if nick in self._motors:
-            return nick
-    
-        if isinstance(nick, str) and ":" in nick:
-            local_nick = nick.split(":")[-1]
-    
-            if local_nick in self._motors:
-                return local_nick
-    
-        return None
-    def addMotor(self, serno_or_owner, dev_type, nickname, remote_flag=0):
-        if remote_flag:
-            self._motors["%s:%s" % (serno_or_owner, nickname)] = self._addRemoteMotor(serno_or_owner, dev_type, nickname)
-        else:
-            self._motors[nickname] = self._addMotor(serno_or_owner, dev_type, nickname)
+    # ------------------------------------------------------------------
+    # Transport lifecycle and message handling
+    def _onTransportConnection(self, connected, reason):
+        self._transport_connected = bool(connected)
+        self._transport_reason = str(reason)
+        self._sig_transport_connection.emit(bool(connected), str(reason))
+        if not connected:
+            self._markRemoteOffline()
 
-    def connectRemoteMotors(self, motor_list=None, owner=None):
-        """
-        Connect remote motors explicitly.
-        """
-    
-        if self.sck is None:
-            #print("[MOTOR] cannot connect remote motors: socket is None")
+    def _onTransportReady(self, ready):
+        self._transport_ready = bool(ready)
+        self._sig_transport_ready.emit(bool(ready))
+        if not ready:
+            self._markRemoteOffline()
             return
-    
-        # If previous connection trial was stuck, reset it and retry.
-        if self._remote_connection_state == "CONNECTING":
-            #print("[MOTOR] previous remote connection was stuck in CONNECTING. Reset and retry.")
-            self._remote_connecting_owners.clear()
-            self._remote_connected_owners.clear()
-            self._remote_connection_state = "DISCONNECTED"
-    
-        # Optional: allow reconnect even after CONNECTED
-        # If you want to block duplicate connection after success, keep this.
-        # If you want reconnect button always available, remove this block.
-        if self._remote_connection_state == "CONNECTED":
-            #print("[MOTOR] remote motors are already connected. Reconnect request will be sent again.")
-            self._remote_connection_state = "DISCONNECTED"
-    
-        target_motors = []
-    
-        # Case 1: explicit motor nickname was given
-        if motor_list is not None:
-            if type(motor_list) == str:
-                motor_list = [motor_list]
-    
-            for full_nick in motor_list:
-                if full_nick not in self._motors:
-                    #print("[MOTOR] unknown remote motor:", full_nick)
-                    continue
-    
-                motor = self._motors[full_nick]
-    
-                if not hasattr(motor, "serial") or motor.serial != "remote":
-                    #print("[MOTOR] not a remote motor:", full_nick)
-                    continue
-    
-                target_motors.append((motor.owner, motor.nickname))
-    
-        # Case 2: owner was given
-        elif owner is not None:
-            if owner not in self._remote_motor_owners:
-                #print("[MOTOR] unknown remote owner:", owner)
-                return
-    
-            for nick in self._remote_motor_owners[owner]:
-                full_nick = "%s:%s" % (owner, nick)
-    
-                if full_nick not in self._motors:
-                    print("[MOTOR] remote motor instance does not exist:", full_nick)
-                    continue
-    
-                target_motors.append((owner, nick))
-    
-        # Case 3: connect all registered remote motors
+        # State changes while offline/handshaking are not queued.  Publish one
+        # authoritative snapshot as soon as registration is ready.
+        for nick in sorted(self._local_motor_keys):
+            motor = self._motors[nick]
+            self.transport.publish_state(nick, motor.status, motor.position)
+
+    def _onProtocolError(self, message):
+        self._detectedError("Motor protocol error: %s" % message)
+
+    def _markRemoteOffline(self):
+        if self._shutting_down:
+            self._pending_remote.clear()
+            self._pending_local.clear()
+            for canonical in self._remote_motor_keys:
+                self._motors[canonical].applyOffline()
+            return
+        for request_id, context in list(self._pending_remote.items()):
+            target = context["target"]
+            self._motors[target].applyError(
+                request_id, "OFFLINE", "Motor Server connection was lost."
+            )
+            self._clearOperationTracking(target, context["action"])
+        self._pending_remote.clear()
+        # Owner-side execute requests belong to the disconnected session and
+        # must not keep a local motor BUSY after reconnect.
+        self._pending_local.clear()
+        for canonical in self._remote_motor_keys:
+            self._motors[canonical].applyOffline()
+
+    def _onTransportMessage(self, message):
+        if not isinstance(message, dict):
+            self._onProtocolError("received a non-object message")
+            return
+        message_type = str(message.get("type", "")).lower()
+        if message_type == "execute":
+            self._handleExecute(message)
+        elif message_type == "state":
+            self._handleRemoteState(message)
+        elif message_type == "result":
+            self._handleRemoteResult(message)
+        elif message_type == "error":
+            self._handleRemoteError(message)
+        elif message_type in ("command_ack", "ack"):
+            self._handleRemoteAck(message)
+        elif message_type == "subscribed":
+            self._handleSubscription(message, True)
+        elif message_type == "unsubscribed":
+            self._handleSubscription(message, False)
         else:
-            for owner_name, nick_list in self._remote_motor_owners.items():
-                for nick in nick_list:
-                    full_nick = "%s:%s" % (owner_name, nick)
-    
-                    if full_nick not in self._motors:
-                        print("[MOTOR] remote motor instance does not exist:", full_nick)
-                        continue
-    
-                    target_motors.append((owner_name, nick))
-    
-        if not target_motors:
-            #print("[MOTOR] no remote motors to connect")
+            self._onProtocolError("unknown motor message type: %s" % message_type)
+
+    def _handleSubscription(self, message, subscribed):
+        for canonical in message.get("motors", []):
+            if canonical in self._remote_motor_keys:
+                self._motors[canonical].applySubscription(subscribed)
+                if subscribed and self.transport.is_ready:
+                    # A state update and the subscription snapshot originate
+                    # on different server sessions and can cross in flight.
+                    # A cache STATUS request sent after the acknowledgement
+                    # gives this proxy a final authoritative snapshot.
+                    self._sendRemoteCommand(canonical, "status", {})
+
+    def _handleRemoteState(self, message):
+        canonical = message.get("motor")
+        if canonical not in self._remote_motor_keys:
+            # State for another owner/local motor must never mutate ours.
             return
-    
-        self._remote_connection_state = "CONNECTING"
-        self._remote_connecting_motors.clear()
-        
-        for owner_name, nick in target_motors:
-            self._remote_connecting_owners.add(owner_name)
-        
-            motor_key = "%s:%s" % (owner_name, nick)
-            self._remote_connecting_motors.add(motor_key)
-        
-            # Show "connecting" state in GUI immediately.
-            if motor_key in self._motors:
-                self._motors[motor_key].status = "connecting"
-        
-            msg = [
-                "C",
-                "%s:MOTORS" % owner_name,
-                "CON",
-                [nick]
-            ]
-        
-            self.toSocket(msg)
-        
-        # Timeout if no STATUS response arrives.
-        self.remote_connect_timer.start(3000)
-    def _onRemoteConnectTimeout(self):
-        if self._remote_connection_state != "CONNECTING":
+        motor = self._motors[canonical]
+        try:
+            motor.applyState(
+                message.get("status", "unknown"),
+                message.get("position"),
+                message.get("online", True),
+            )
+        except (TypeError, ValueError) as exc:
+            self._onProtocolError(str(exc))
+
+    def _handleRemoteAck(self, message):
+        request_id = message.get("request_id")
+        context = self._pending_remote.get(request_id)
+        if context is not None and context["action"] != "status":
+            self._motors[context["target"]].applyAck(request_id)
+
+    def _handleRemoteResult(self, message):
+        request_id = message.get("request_id")
+        context = self._pending_remote.pop(request_id, None)
+        if context is None:
             return
-    
-        print("[MOTOR] remote connection timeout")
-    
-        # Mark pending remote motors as error so GUI button becomes Reconnect.
-        for motor_key in list(self._remote_connecting_motors):
-            if motor_key in self._motors:
-                self._motors[motor_key].status = "error"
-    
-        self._remote_connecting_motors.clear()
-        self._remote_connecting_owners.clear()
-        self._remote_connection_state = "DISCONNECTED"
-    
-        if self.gui:
-            self.gui.toStatusBar("Remote motor connection timeout. Please reconnect.")
+        target = context["target"]
+        if message.get("motor") not in (None, target):
+            self._onProtocolError("result target does not match request")
+            return
+        result_status = str(message.get("status", "failed")).lower()
+        motor = self._motors[target]
+        motor.applyResult(
+            request_id,
+            context["action"],
+            result_status,
+            message.get("position"),
+        )
+        if result_status != "completed":
+            self._detectedError(
+                "Remote request %s ended with %s." % (request_id, result_status)
+            )
+            self._clearOperationTracking(target, context["action"])
+
+    def _handleRemoteError(self, message):
+        request_id = message.get("request_id")
+        context = self._pending_remote.pop(request_id, None)
+        canonical = message.get("motor")
+        if context is not None:
+            canonical = context["target"]
+        if canonical in self._remote_motor_keys:
+            action = context["action"] if context is not None else None
+            self._motors[canonical].applyError(
+                request_id,
+                message.get("code", "REMOTE_ERROR"),
+                message.get("message", "Remote motor error"),
+            )
+            self._clearOperationTracking(canonical, action)
         else:
-            print("Remote motor connection timeout. Please reconnect.")        
-    def _addMotor(self, serno, dev_type, nickname):        
-        motor = MotorHandler(self, serno, dev_type=dev_type, nick=nickname)
-        
-        motor._sig_motor_initialized.connect(self._initializedMotor)
-        motor._sig_motor_move_done.connect(self._completedMotorMoving)
-        motor._sig_motor_error.connect(self._detectedError)
-        motor._sig_motor_homed.connect(self._homedMotor)
-        
-        return motor
-    
-    def _addRemoteMotor(self, owner, dev_type, nickname):
-        motor = RemoteMotorHandler(self, owner, dev_type, nickname, self.sck)
-        motor._sig_motor_initialized.connect(self._initializedMotor)
-        motor._sig_motor_move_done.connect(self._completedMotorMoving)
-        motor._sig_motor_error.connect(self._detectedError)
-        motor._sig_motor_homed.connect(self._homedMotor)
-        
-        return motor
-        
-    def _removeMotor(self, nickname):
-        if nickname in self._motors.keys():
-            self._motors[nickname].closeDevice()
-            self._motors.pop(nickname)
-    
-    @remote_control_wrapper
+            self._detectedError(
+                "Motor server error [%s]: %s" % (
+                    message.get("code", "REMOTE_ERROR"),
+                    message.get("message", "Unknown error"),
+                )
+            )
+
+    def _handleExecute(self, message):
+        request_id = message.get("request_id")
+        local_nick = self._localFromExecuteTarget(message)
+        action = str(message.get("action", "")).lower()
+        if local_nick is None:
+            # With a valid server this cannot occur.  We cannot publish an error
+            # for an unregistered local id through the strict transport API.
+            self._onProtocolError("execute target is not owned by this client")
+            return
+        if not request_id or action not in self._SUPPORTED_ACTIONS:
+            self.transport.publish_error(
+                request_id or "invalid-request",
+                local_nick,
+                "INVALID_COMMAND",
+                "Unsupported motor action: %s" % action,
+            )
+            return
+
+        motor = self._motors[local_nick]
+        if action == "status":
+            self.transport.publish_state(
+                local_nick, motor.status, motor.position
+            )
+            self.transport.publish_result(
+                request_id, local_nick, "completed", motor.position
+            )
+            return
+
+        if action != "stop" and (
+            local_nick in self._pending_local
+            or motor.status in self._BUSY_STATES
+            or motor.isBusy()
+        ):
+            self.transport.publish_error(
+                request_id,
+                local_nick,
+                "BUSY",
+                "Motor %s is busy." % local_nick,
+            )
+            return
+
+        args = message.get("args") or {}
+        target = args.get("position") if action == "move" else None
+        self._pending_local[local_nick] = {
+            "request_id": request_id,
+            "action": action,
+            "requester": message.get("requester"),
+        }
+        work = motor.toWorkList(
+            action,
+            target=target,
+            request_id=request_id,
+            requester=message.get("requester"),
+        )
+        if work is None:
+            # Validation/STOP failures can synchronously emit
+            # _localCommandError, which already publishes the correlated
+            # error and removes the context.  Only provide a fallback if no
+            # callback handled it.
+            context = self._pending_local.pop(local_nick, None)
+            if context is not None:
+                self.transport.publish_error(
+                    request_id,
+                    local_nick,
+                    "INVALID_ARGUMENT",
+                    "Command could not be queued.",
+                )
+
+    def _sendRemoteCommand(self, target, action, args=None):
+        if target not in self._remote_motor_keys:
+            self._detectedError("Unknown remote motor: %s" % target)
+            return None
+        if not self.transport.is_ready:
+            self._detectedError("Motor Server is not ready.")
+            return None
+        request_id = self.transport.send_command(target, action, args or {})
+        if request_id is not None:
+            self._pending_remote[request_id] = {
+                "target": target,
+                "action": str(action).lower(),
+            }
+        return request_id
+
+    # ------------------------------------------------------------------
+    # Local worker callbacks
+    def _localStatusChanged(self, nick, status):
+        if nick in self._local_motor_keys:
+            motor = self._motors[nick]
+            self.transport.publish_state(nick, status, motor.position)
+
+    def _localPositionChanged(self, nick, position):
+        if nick not in self._local_motor_keys:
+            return
+        self._sig_motors_positions.emit({nick: position})
+        self.transport.publish_state(
+            nick, self._motors[nick].status, position
+        )
+
+    def _remotePositionChanged(self, canonical, position):
+        if canonical in self._remote_motor_keys:
+            self._sig_motors_positions.emit({canonical: position})
+
+    def _localCommandFinished(self, nick, action, request_id, result):
+        if request_id is None:
+            return
+        context = self._pending_local.get(nick)
+        if context is None or context["request_id"] != request_id:
+            return
+        self._pending_local.pop(nick, None)
+        motor = self._motors[nick]
+        self.transport.publish_state(nick, motor.status, motor.position)
+        self.transport.publish_result(
+            request_id, nick, "completed", motor.position
+        )
+
+    def _localCommandError(self, nick, action, request_id, message):
+        if request_id is None:
+            self._clearOperationTracking(nick, action)
+            return
+        context = self._pending_local.get(nick)
+        if context is None or context["request_id"] != request_id:
+            # A STOP pre-empts and replaces the active server request.  The
+            # interrupted worker may finish unwinding afterwards; never report
+            # that stale request as a new hardware failure.
+            self._clearOperationTracking(nick, action)
+            return
+        self._pending_local.pop(nick, None)
+        self.transport.publish_state(
+            nick, self._motors[nick].status, self._motors[nick].position
+        )
+        self.transport.publish_error(
+            request_id, nick, "HARDWARE_ERROR", message
+        )
+        self._clearOperationTracking(nick, action)
+
     def _initializedMotor(self, nick):
-        if nick in self._motors_under_loading:
-            self._motors_under_loading.remove(nick)
-        self._sig_motors_initialized.emit(len(self._motors_under_loading), nick)  # Let applications know how many motors are left.
-    
-    def getPosition(self, nickname):
-        return self._motors[nickname].getPosition()
-    
-    def homePosition(self, motor_list):
-        for motor_nick in motor_list:
-            if motor_nick not in self._motors:
-                self._detectedError("Unknown motor: %s" % motor_nick)
-                continue
-    
-            if ":" in motor_nick and self._remote_connection_state != "CONNECTED":
-                self._detectedError(
-                    "Remote motor is not connected yet: %s" % motor_nick
-                )
-                continue
-    
-            self._motors[motor_nick].toWorkList("H")
-            self._motors_under_homing.append(motor_nick)
-    
-    def moveToPosition(self, motor_dict):
-        print("[CTRL moveToPosition ENTER]",
-              "user=", getattr(self, "user_name", "UNKNOWN"),
-              "motor_dict=", motor_dict)
-    
-        for motor_nick, target_position in motor_dict.items():
-            print("[CTRL MOVE REQUEST]",
-                  "motor_nick=", motor_nick,
-                  "target=", target_position)
-    
-            print("[CTRL KNOWN MOTORS]", list(self._motors.keys()))
-    
-            if motor_nick not in self._motors:
-                print("[CTRL MOVE FAIL] unknown motor:", motor_nick)
-                self._detectedError("Unknown motor: %s" % motor_nick)
-                continue
-    
-            motor = self._motors[motor_nick]
-    
-            print("[CTRL MOTOR SELECTED]",
-                  "motor_nick=", motor_nick,
-                  "motor_class=", type(motor).__name__,
-                  "motor_nickname=", getattr(motor, "nickname", None),
-                  "serial=", getattr(motor, "serial", None),
-                  "status=", getattr(motor, "status", None),
-                  "opened=", getattr(motor, "_is_opened", None),
-                  "isRunning=", motor.isRunning() if hasattr(motor, "isRunning") else None,
-                  "queue_size=", motor.queue.qsize() if hasattr(motor, "queue") else None)
-    
-            if ":" in motor_nick and self._remote_connection_state != "CONNECTED":
-                print("[CTRL MOVE FAIL] remote not connected:",
-                      motor_nick,
-                      "remote_state=", self._remote_connection_state)
-                self._detectedError(
-                    "Remote motor is not connected yet: %s" % motor_nick
-                )
-                continue
-    
-            if hasattr(motor, "_is_opened") and not motor._is_opened:
-                print("[CTRL MOVE FAIL] motor not opened:", motor_nick)
-                self._detectedError(
-                    "Motor is not opened yet: %s" % motor_nick
-                )
-                continue
-    
-            motor.setTargetPosition(target_position)
-    
-            print("[CTRL TARGET SET]",
-                  "motor_nick=", motor_nick,
-                  "target=", getattr(motor, "_target", None))
-    
-            self._motors_under_request.append(motor_nick)
-    
-            print("[CTRL REQUEST APPENDED]",
-                  "_motors_under_request=", self._motors_under_request)
-    
-            print("[CTRL BEFORE motor.toWorkList]",
-                  "motor_nick=", motor_nick,
-                  "cmd=M")
-    
-            motor.toWorkList("M")
-    
-            print("[CTRL AFTER motor.toWorkList]",
-                  "motor_nick=", motor_nick,
-                  "isRunning=", motor.isRunning() if hasattr(motor, "isRunning") else None,
-                  "queue_size=", motor.queue.qsize() if hasattr(motor, "queue") else None)
-    
-        if len(self._motors_under_request) and not self.pos_checker.isActive():
-            print("[CTRL POS CHECK START]",
-                  "_motors_under_request=", self._motors_under_request)
-            self.pos_checker.start(qtimer_interval)
+        motor_key = self._resolveMotorNick(nick)
+        if motor_key is None:
+            return
+        if motor_key in self._motors_under_loading:
+            self._motors_under_loading.remove(motor_key)
+        self._sig_motors_initialized.emit(
+            len(self._motors_under_loading), motor_key
+        )
+        self._sig_motors_positions.emit(
+            {motor_key: self._motors[motor_key].position}
+        )
 
-    @remote_control_wrapper
     def _completedMotorMoving(self, nick, position):
         motor_key = self._resolveMotorNick(nick)
-    
-        candidates = [nick]
-        if motor_key is not None:
-            candidates.append(motor_key)
-            candidates.append(self._fullMotorNick(motor_key))
-    
-        for key in candidates:
-            if key in self._motors_under_request:
-                self._motors_under_request.remove(key)
-                break
-    
+        if motor_key is None:
+            return
+        self._removeMovingMotor(motor_key)
+
+    def _homedMotor(self, nick):
+        motor_key = self._resolveMotorNick(nick)
+        if motor_key is None:
+            return
+        if motor_key in self._motors_under_homing:
+            self._motors_under_homing.remove(motor_key)
+        self._removeMovingMotor(motor_key)
+
+    def _removeMovingMotor(self, motor_key):
+        while motor_key in self._motors_under_request:
+            self._motors_under_request.remove(motor_key)
+
+    def _clearOperationTracking(self, motor_key, action=None):
+        self._removeMovingMotor(motor_key)
+        if motor_key in self._motors_under_homing:
+            self._motors_under_homing.remove(motor_key)
+        if motor_key in self._motors_under_loading:
+            self._motors_under_loading.remove(motor_key)
+            self._sig_motors_initialized.emit(
+                len(self._motors_under_loading), motor_key
+            )
+
+    def _detectedError(self, msg):
+        if self.gui is not None and hasattr(self.gui, "toStatusBar"):
+            self.gui.toStatusBar(str(msg))
+        else:
+            print("[MOTOR] %s" % msg)
+
+    # ------------------------------------------------------------------
+    # Public facade used by GUI, PMT aligner, scanner and shifter
+    def getPosition(self, nickname):
+        motor_key = self._resolveMotorNick(nickname)
+        if motor_key is None:
+            raise KeyError("Unknown motor: %s" % nickname)
+        return self._motors[motor_key].getPosition()
+
+    @staticmethod
+    def _asMotorList(motor_list):
+        if motor_list is None:
+            return []
+        if isinstance(motor_list, str):
+            return [motor_list]
+        return list(motor_list)
+
+    def _remoteUsable(self, motor_key):
+        motor = self._motors[motor_key]
+        return self.transport.is_ready and motor.subscribed and motor.online
+
+    def _rejectBusy(self, motor_key):
+        motor = self._motors[motor_key]
+        if not motor.isBusy():
+            return False
+        motor._sig_motor_error.emit("Motor %s is busy." % motor_key)
+        return True
+
+    def isRemoteMotorAvailable(self, nickname):
+        motor_key = self._resolveMotorNick(nickname)
+        return bool(
+            motor_key in self._remote_motor_keys and self._remoteUsable(motor_key)
+        )
+
+    def connectRemoteMotors(self, motor_list=None, owner=None):
+        if motor_list is None and owner is None:
+            targets = sorted(self._remote_motor_keys)
+        elif owner is not None:
+            targets = [
+                "%s:%s" % (owner, nick)
+                for nick in self._remote_motor_owners.get(owner, [])
+            ]
+        else:
+            targets = self._asMotorList(motor_list)
+        targets = [target for target in targets if target in self._remote_motor_keys]
+        if not targets:
+            return False
+        for target in targets:
+            motor = self._motors[target]
+            if not motor.online:
+                motor.status = "subscribing"
+        return self.transport.subscribe(targets)
+
+    def releaseRemoteMotors(self, motor_list=None, owner=None):
+        if motor_list is None and owner is None:
+            targets = sorted(self._remote_motor_keys)
+        elif owner is not None:
+            targets = [
+                "%s:%s" % (owner, nick)
+                for nick in self._remote_motor_owners.get(owner, [])
+            ]
+        else:
+            targets = self._asMotorList(motor_list)
+        targets = [target for target in targets if target in self._remote_motor_keys]
+        if not targets:
+            return False
+        result = self.transport.unsubscribe(targets)
+        for target in targets:
+            self._motors[target].applySubscription(False)
+        return result
+
+    # Backward-compatible name.  It now releases a subscription and never
+    # sends a physical CLOSE command.
+    disconnectRemoteMotors = releaseRemoteMotors
+
     def openDevice(self, motor_list):
-        if type(motor_list) == str:
-            motor_list = [motor_list]
-    
-        valid_motor_list = []
-    
-        for m_nick in motor_list:
-            motor_key = self._resolveMotorNick(m_nick)
-    
+        valid = []
+        for requested in self._asMotorList(motor_list):
+            motor_key = self._resolveMotorNick(requested)
             if motor_key is None:
-                self._detectedError("Unknown motor: %s" % m_nick)
+                self._detectedError("Unknown motor: %s" % requested)
                 continue
-    
-            if ":" in motor_key and self._remote_connection_state != "CONNECTED":
-                self._detectedError(
-                    "Remote motor is not connected yet: %s" % motor_key
-                )
+            if motor_key in self._remote_motor_keys and not self._remoteUsable(motor_key):
+                self._detectedError("Remote motor is unavailable: %s" % motor_key)
                 continue
-    
-            valid_motor_list.append(motor_key)
-    
-        self._sig_motors_initialized.emit(len(valid_motor_list), "")
-    
-        for motor_key in valid_motor_list:
+            if self._rejectBusy(motor_key):
+                continue
+            valid.append(motor_key)
+        self._sig_motors_initialized.emit(len(valid), "")
+        for motor_key in valid:
             if motor_key not in self._motors_under_loading:
                 self._motors_under_loading.append(motor_key)
-            self._motors[motor_key].toWorkList("O")
-            
-    def closeDevice(self, motor_list):
-        if type(motor_list) == str:
-            motor_list = [motor_list]
-    
-        for m_nick in motor_list:
-            motor_key = self._resolveMotorNick(m_nick)
-    
-            if motor_key is None:
-                self._detectedError("Unknown motor: %s" % m_nick)
-                continue
-    
-            self._motors[motor_key].toWorkList("D")
+            if self._motors[motor_key].toWorkList("open") is None:
+                self._motors_under_loading.remove(motor_key)
 
-    @remote_control_wrapper
-    def _homedMotor(self, nick):
-        self._motors_under_homing.remove(nick)
-            
-    def homeDevice(self, motor_list):
-        for m_idx, m_nick in enumerate(motor_list):
-            self._motors[m_nick].toWorkList("H")
-            self._motors_under_homing.append(m_nick)
-          
-    def checkPositionsUnderMoving(self):
-        if len(self._motors_under_request):
-            print("[POS CHECK] _motors_under_request:", self._motors_under_request)
-    
-            position_dict = {}
-            for m_nick in self._motors_under_request:
-                position_dict[m_nick] = self._motors[m_nick].getPosition()
-    
-            self._sig_motors_positions.emit(position_dict)
-    
-            if self.remote_flag:
-                self._announcePositionsUnderMoving(position_dict)
-    
+    def moveToPosition(self, motor_dict):
+        if not isinstance(motor_dict, dict):
+            self._detectedError("Motor move request must be a dictionary.")
+            return
+        for requested, target in motor_dict.items():
+            motor_key = self._resolveMotorNick(requested)
+            if motor_key is None:
+                self._detectedError("Unknown motor: %s" % requested)
+                continue
+            motor = self._motors[motor_key]
+            if motor_key in self._remote_motor_keys and not self._remoteUsable(motor_key):
+                self._detectedError("Remote motor is unavailable: %s" % motor_key)
+                continue
+            if self._rejectBusy(motor_key):
+                continue
+            if not motor._is_opened:
+                self._detectedError("Motor is not opened yet: %s" % motor_key)
+                continue
+            work = motor.toWorkList("move", target=target)
+            if work is None:
+                continue
+            if motor_key not in self._motors_under_request:
+                self._motors_under_request.append(motor_key)
+        if self._motors_under_request and not self.pos_checker.isActive():
             self.pos_checker.start(qtimer_interval)
-            
-    def _announcePositionsUnderMoving(self, position_dict):
-        position_list = []
-        for nick, position in position_dict.items():
-            position_list.append(self._fullMotorNick(nick))
-            position_list.append(position)
-    
-        msg = ["D", "%s:MOTORS" % self.user_name, "POS", position_list]
-        self.toSocket(msg)
-        
-    @remote_control_wrapper
-    def _detectedError(self, msg):
-        if self.gui:
-            self.gui.toStatusBar(msg)
-        else:
-            print(msg)
-        
-    def toWorkList(self, cmd):
-        print("[CTRL toWorkList ENTER]",
-              "user=", getattr(self, "user_name", "UNKNOWN"),
-              "cmd=", cmd,
-              "status=", getattr(self, "_status", None),
-              "queue_before=", self.queue.qsize())
-    
-        self.queue.put(cmd)
-    
-        print("[CTRL toWorkList PUT]",
-              "user=", getattr(self, "user_name", "UNKNOWN"),
-              "cmd=", cmd,
-              "status=", getattr(self, "_status", None),
-              "queue_after=", self.queue.qsize())
-    
-        if not self._status == "running":
-            print("[CTRL RUN CALL]",
-                  "user=", getattr(self, "user_name", "UNKNOWN"))
-            self.run()
-        else:
-            print("[CTRL ALREADY RUNNING]",
-                  "user=", getattr(self, "user_name", "UNKNOWN"))
-            
+
+    def homePosition(self, motor_list):
+        for requested in self._asMotorList(motor_list):
+            motor_key = self._resolveMotorNick(requested)
+            if motor_key is None:
+                self._detectedError("Unknown motor: %s" % requested)
+                continue
+            motor = self._motors[motor_key]
+            if motor_key in self._remote_motor_keys and not self._remoteUsable(motor_key):
+                self._detectedError("Remote motor is unavailable: %s" % motor_key)
+                continue
+            if self._rejectBusy(motor_key):
+                continue
+            if not motor._is_opened:
+                self._detectedError("Motor is not opened yet: %s" % motor_key)
+                continue
+            if motor.toWorkList("home") is not None:
+                if motor_key not in self._motors_under_homing:
+                    self._motors_under_homing.append(motor_key)
+
+    homeDevice = homePosition
+
+    def closeDevice(self, motor_list=None):
+        # A no-argument close is used by older application shutdown code.  Do
+        # not close somebody else's physical motors in that case.
+        targets = (
+            sorted(self._local_motor_keys)
+            if motor_list is None
+            else self._asMotorList(motor_list)
+        )
+        for requested in targets:
+            motor_key = self._resolveMotorNick(requested)
+            if motor_key is None:
+                self._detectedError("Unknown motor: %s" % requested)
+                continue
+            if motor_key in self._remote_motor_keys and not self._remoteUsable(motor_key):
+                self._detectedError("Remote motor is unavailable: %s" % motor_key)
+                continue
+            if self._rejectBusy(motor_key):
+                continue
+            self._motors[motor_key].toWorkList("close")
+
+    def stopMotor(self, nickname):
+        motor_key = self._resolveMotorNick(nickname)
+        if motor_key is None:
+            self._detectedError("Unknown motor: %s" % nickname)
+            return None
+        if motor_key in self._remote_motor_keys and not self._remoteUsable(motor_key):
+            self._detectedError("Remote motor is unavailable: %s" % motor_key)
+            return None
+        return self._motors[motor_key].toWorkList("stop")
+
+    def stopMotors(self, motor_list):
+        return [self.stopMotor(nick) for nick in self._asMotorList(motor_list)]
+
+    def checkPositionsUnderMoving(self):
+        positions = {}
+        for motor_key in list(self._motors_under_request):
+            motor = self._motors.get(motor_key)
+            if motor is None:
+                self._removeMovingMotor(motor_key)
+                continue
+            try:
+                positions[motor_key] = motor.getPosition()
+            except Exception as exc:
+                self._detectedError("Could not read %s: %s" % (motor_key, exc))
+        if positions:
+            self._sig_motors_positions.emit(positions)
+        if self._motors_under_request:
+            self.pos_checker.start(qtimer_interval)
+
+    def toWorkList(self, work):
+        """Compatibility adapter for in-process legacy callers such as Shifter."""
+        if not isinstance(work, (list, tuple)) or len(work) < 3:
+            self._detectedError("Invalid legacy motor work item: %r" % (work,))
+            return
+        work_type = str(work[0]).upper()
+        command = str(work[1]).upper()
+        data = work[2]
+        requester = work[3] if len(work) > 3 else None
+        if work_type == "C":
+            if command == "MOVE":
+                self.moveToPosition(dict(zip(data[::2], data[1::2])))
+            elif command == "OPEN":
+                self.openDevice(data)
+            elif command == "HOME":
+                self.homePosition(data)
+            elif command == "CLOSE":
+                self.closeDevice(data)
+            elif command == "STOP":
+                self.stopMotors(data)
+            elif command == "CON":
+                self.connectRemoteMotors(data)
+            elif command == "DCN":
+                self.releaseRemoteMotors(data)
+            else:
+                self._detectedError("Unknown legacy motor command: %s" % command)
+        elif work_type == "Q" and command in ("POS", "STATUS"):
+            flat = []
+            for requested in data:
+                motor_key = self._resolveMotorNick(requested)
+                if motor_key is None:
+                    continue
+                flat.extend((requested, self._motors[motor_key].getPosition()))
+            if requester is not None and hasattr(requester, "toMessageList"):
+                requester.toMessageList(["D", "MOTORS", command, flat])
+
     def run(self):
-        while self.queue.qsize():
-            work = self.queue.get()
-            self._status  = "running"
-            # decompose the job
-            work_type, command = work[:2]
-            data = work[2]
-            if work_type == "C":
-                if command == "CON":
-                    self.remote_flag = True
-                    status_list = []
-                
-                    for nick in data:
-                        motor_key = self._resolveMotorNick(nick)
-                
-                        if motor_key is None:
-                            print("[MOTOR WARNING] CON for unknown motor:", nick)
-                            print("[MOTOR WARNING] known motors:", list(self._motors.keys()))
-                            continue
-                
-                        full_nick = self._fullMotorNick(motor_key)
-                
-                        status_list.append(full_nick)
-                        status_list.append(self._motors[motor_key].status)
-                        status_list.append(self._motors[motor_key].position)
-                
-                    if status_list:
-                        msg = ["D", "%s:MOTORS" % self.user_name, "STATUS", status_list]
-                        self.toSocket(msg)
-                    
-                elif command == "DCN":
-                    """
-                    Close the remote control mode
-                    """
-                    self.remote_flag = False
-                    msg = ["D", "%s:MOTORS" % self.user_name, "REMOTE", [False]]
-                    self.toSocket(msg)
-                    
-                elif command == "OPEN":
-                    self.openDevice(data)
-                    new_data = [self._fullMotorNick(nick) for nick in data]
-                    msg = ["D", "%s:MOTORS" % self.user_name, "INIT", new_data]
-                    self.toSocket(msg)
-                    
-                elif command == "CLOSE":
-                    self.closeDevice(data)
-                    new_data = [self._fullMotorNick(nick) for nick in data]
-                    msg = ["D", "%s:MOTORS" % self.user_name, "CLOSE", new_data]
-                    self.toSocket(msg)
-                    
-                elif command == "HOME":
-                    self.homeDevice(data)
-                    new_data = [self._fullMotorNick(nick) for nick in data]
-                    msg = ["D", "%s:MOTORS" % self.user_name, "HOME", new_data]
-                    self.toSocket(msg)
-                                
-                elif command == "MOVE":
-                    data_dict = dict(zip(data[::2], data[1::2]))
-                    self.moveToPosition(data_dict)
-                    new_data = [self._fullMotorNick(nick) for nick in data[::2]]
-                
-                    msg = ["D", "%s:MOTORS" % self.user_name, "MOVE", new_data]
-                    self.toSocket(msg)
-                    
-                else:
-                    raise RuntimeError("An unknown data command while handling command data. (%s)" % command)
-                    
-            elif work_type == "Q":
-                if command == "STATUS":
-                    status_list = []
-                    for nick in data:
-                        status_list.append("%s:%s" % (self.user_name, nick))
-                        status_list.append(self._motors[nick].status)
-                        
-                    msg = ["D", "MOTORS", "STATUS", status_list]
-                    self.toSocket(msg)
-                
-                elif command == "POS":
-                    position_list = []
-                    for nick in data:
-                        position_list.append("%s:%s" % (self.user_name, nick))
-                        position_list.append(self._motors[nick].getPosition())
-                    
-                    msg = ["D", "MOTORS", "POS", position_list]
-                    self.toSocket(msg)
-                else:
-                    raise RuntimeError("An unknown data command while handling query. (%s)" % command)
-                    
-            # Data D is used when data has been acquired from the owner.        
-            elif work_type == "D":
-                self._handling_remote_data = True
-            
-                try:
-                    if command == "STATUS":
-                        position_dict = {}
-            
-                        for nick, status, position in zip(data[::3], data[1::3], data[2::3]):
-                            motor_key = self._resolveMotorNick(nick)
-            
-                            if motor_key is None:
-                                print("[MOTOR WARNING] received STATUS for unknown motor:", nick)
-                                print("[MOTOR WARNING] known motors:", list(self._motors.keys()))
-                                continue
-            
-                            self._motors[motor_key].position = position
-                            self._motors[motor_key].status = status
-            
-                            position_dict[motor_key] = position
-            
-                            if ":" in nick:
-                                owner = nick.split(":")[0]
-                                self._remote_connected_owners.add(owner)
-                                self._remote_connecting_owners.discard(owner)
-            
-                            self._remote_connecting_motors.discard(motor_key)
-            
-                        if len(self._remote_connecting_motors) == 0:
-                            if self.remote_connect_timer.isActive():
-                                self.remote_connect_timer.stop()
-            
-                        if len(self._remote_connecting_owners) == 0 and len(self._remote_connected_owners) > 0:
-                            self._remote_connection_state = "CONNECTED"
-            
-                        self._sig_motors_positions.emit(position_dict)
-            
-                    elif command == "REMOTE":
-                        self.remote_flag = data[0]
-            
-                    elif command == "INIT":
-                        for nick in data:
-                            motor_key = self._resolveMotorNick(nick)
-                            if motor_key is None:
-                                print("[MOTOR WARNING] INIT for unknown motor:", nick)
-                                continue
-                            self._motors[motor_key].status = "initiating"
-            
-                    elif command == "INITED":
-                        for nick in data:
-                            motor_key = self._resolveMotorNick(nick)
-                            if motor_key is None:
-                                print("[MOTOR WARNING] INITED for unknown motor:", nick)
-                                continue
-            
-                            self._motors[motor_key].status = "standby"
-                            self._motors[motor_key]._is_opened = True
-                            self._motors[motor_key]._sig_motor_initialized.emit(motor_key)
-            
-                    elif command == "MOVE":
-                        for nick in data:
-                            motor_key = self._resolveMotorNick(nick)
-                            if motor_key is None:
-                                print("[MOTOR WARNING] MOVE for unknown motor:", nick)
-                                continue
-                            self._motors[motor_key].status = "moving"
-            
-                    elif command == "MOVED":
-                        for nick, position in zip(data[::2], data[1::2]):
-                            motor_key = self._resolveMotorNick(nick)
-                            if motor_key is None:
-                                print("[MOTOR WARNING] MOVED for unknown motor:", nick)
-                                continue
-            
-                            self._motors[motor_key].position = position
-                            self._motors[motor_key].status = "standby"
-                            self._motors[motor_key]._sig_motor_move_done.emit(motor_key, position)
-            
-                    elif command == "HOME":
-                        for nick in data:
-                            motor_key = self._resolveMotorNick(nick)
-                            if motor_key is None:
-                                print("[MOTOR WARNING] HOME for unknown motor:", nick)
-                                continue
-                            self._motors[motor_key].status = "homing"
-            
-                    elif command == "HOMED":
-                        for nick in data:
-                            motor_key = self._resolveMotorNick(nick)
-                            if motor_key is None:
-                                print("[MOTOR WARNING] HOMED for unknown motor:", nick)
-                                continue
-            
-                            self._motors[motor_key].status = "standby"
-                            self._motors[motor_key]._sig_motor_homed.emit(motor_key)
-                            self._motors[motor_key].position = 0
-            
-                    elif command == "CLOSE":
-                        for nick in data:
-                            motor_key = self._resolveMotorNick(nick)
-                            if motor_key is None:
-                                print("[MOTOR WARNING] CLOSE for unknown motor:", nick)
-                                continue
-            
-                            self._motors[motor_key].status = "closed"
-                            self._motors[motor_key]._is_opened = False
-            
-                    elif command == "POS":
-                        for nick, position in zip(data[::2], data[1::2]):
-                            motor_key = self._resolveMotorNick(nick)
-                            if motor_key is None:
-                                print("[MOTOR WARNING] POS for unknown motor:", nick)
-                                continue
-            
-                            self._motors[motor_key].position = position
-            
-                    else:
-                        raise RuntimeError("An unknown data command while handling returned data. (%s)" % command)
-            
-                finally:
-                    self._handling_remote_data = False                
-            elif work_type == "E":  # An Error has been detected
-                nick = command
-                error_message = data[0] if len(data) else "Unknown error"
-            
-                print("[MOTOR ERROR]", nick, error_message)
-            
-                self._remote_connection_state = "ERROR"
-            
-                motor_key = self._resolveMotorNick(nick)
-            
-                if motor_key is not None:
-                    # IMPORTANT:
-                    # Do not emit _sig_motor_error here.
-                    # It can call _detectedError(), and remote_control_wrapper may send E again.
-                    self._motors[motor_key].status = "error"
-            
-                    if self.gui:
-                        self.gui.toStatusBar("Remote motor error: %s / %s" % (motor_key, error_message))
-                    else:
-                        print("Remote motor error:", motor_key, error_message)
-            
-                else:
-                    # Also do not call self._detectedError() here.
-                    # Just display/log it locally.
-                    if self.gui:
-                        self.gui.toStatusBar("Remote motor error: %s / %s" % (nick, error_message))
-                    else:
-                        print("Remote motor error:", nick, error_message)
-            
-        self._status = "standby"
-        self.message_thread.quit()
-        
-        
+        # Kept only because old code may call it after _sig_remote_control.
+        return
+
     def toSocket(self, msg):
-        if not self.sck == None:
-            self.sck.toMessageList(msg)
-        else:
-            print(msg)
-            
-         
-"""
-client = srv.rh.client_list[0]
-client.toMessageList(["C", "MOTORS", "CON", ["px", "py", "pz"]])
-"""
+        self._detectedError("Legacy DDS MOTOR socket output is disabled.")
+        return False
+
+    def shutdown(self):
+        if self._shutting_down:
+            return
+        self._shutting_down = True
+        self.pos_checker.stop()
+        # Stop remote traffic first; local device cleanup is independent.
+        self.transport.shutdown()
+        for canonical in self._remote_motor_keys:
+            self._motors[canonical].shutdown()
+        for nick in self._local_motor_keys:
+            self._motors[nick].shutdown(wait_ms=15000)
+        self._pending_local.clear()
+        self._pending_remote.clear()

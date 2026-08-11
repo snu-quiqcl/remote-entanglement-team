@@ -25,29 +25,39 @@ class MotorController_GUI(QtWidgets.QMainWindow, Ui_Form):
     
     def __init__(self, controller=None):
         QtWidgets.QMainWindow.__init__(self)
-        
+        if controller is None:
+            raise ValueError("MotorController_GUI requires a controller.")
         self.setupUi(self)
         self.checkBox.setVisible(False)
-        
-        # Add a button to connect remote motors manually.
-        # self.btnConnectRemote = QtWidgets.QPushButton("Connect Remote")
-        # self.btnConnectRemote.clicked.connect(self.pressedConnectRemoteMotors)
-        
-        # # Existing motor columns use 0~4:
-        # # checkbox, nickname, serial, position, status
-        # # Put the new button in column 5 of the header row.
-        # self.gridLayout.addWidget(self.btnConnectRemote, 0, 5)
-               
+        # The standalone server authenticates a fixed inventory during
+        # registration.  Local hardware changes require config + restart.
+        self.BTN_add.setEnabled(False)
+        self.BTN_add.setToolTip(
+            "Edit the [motors] config and restart to register new hardware."
+        )
         self.parent = controller
+
+        self.HEAD_subscription = QLabel("Subscription")
+        self.HEAD_subscription.setAlignment(Qt.AlignCenter)
+        self.gridLayout.addWidget(self.HEAD_subscription, 0, 5)
+
+        self.Qserver = QLabel("Motor Server: connecting")
+        self.Qserver.setAlignment(Qt.AlignCenter)
+        self.horizontalLayout.insertWidget(1, self.Qserver)
+
+        self.BTN_stop = QtWidgets.QPushButton("Stop")
+        self.BTN_stop.setMinimumSize(80, 25)
+        self.BTN_stop.clicked.connect(self.pressedStopMotors)
+        self.horizontalLayout.addWidget(self.BTN_stop)
         
         self.motor_idx = 1
         self.motor_dict = {}
             
-        self.setWindowTitle("Motor Controller v3.0")
+        self.setWindowTitle("Motor Controller v4.0")
         self.parent._sig_motors_positions.connect(self.updatePosition)
-        
-        if not self.parent == None:
-            self._initMotors(self.parent._motors)
+        self.parent._sig_transport_connection.connect(self.changedServerConnection)
+        self.parent._sig_transport_ready.connect(self.changedServerReady)
+        self._initMotors(self.parent._motors)
             
         self._gui_initialized = True
             
@@ -126,6 +136,14 @@ class MotorController_GUI(QtWidgets.QMainWindow, Ui_Form):
                 motor_list.append(motor_nick)
                 motor_handle.QcheckBox.setChecked(False)
         self.parent.closeDevice(motor_list)
+
+    def pressedStopMotors(self):
+        motor_list = []
+        for motor_nick, motor_handle in self.motor_dict.items():
+            if motor_handle.isChecked:
+                motor_list.append(motor_nick)
+                motor_handle.QcheckBox.setChecked(False)
+        self.parent.stopMotors(motor_list)
         
     def pressedAddMotor(self):
         nickname, nickname_returned = QInputDialog.getText(self, "Motor adder (1/3)", "Enter the motor's nickname:")
@@ -173,17 +191,16 @@ class MotorController_GUI(QtWidgets.QMainWindow, Ui_Form):
                 self.toStatusBar("This motor is not a remote motor: %s" % motor_nick)
                 return
     
-            # If connected, use the same button as Disconnect.
-            if motor_handle.Qconnect.text() == "Disconnect" or motor.status == "standby":
-                self.parent.closeDevice([motor_nick])
-                motor_handle.Qconnect.setText("Reconnect")
-                motor_handle.Qconnect.setEnabled(True)
-                self.toStatusBar("Remote motor disconnection requested: %s" % motor_nick)
+            # Subscription release never sends a physical CLOSE command.
+            if motor.subscribed:
+                self.parent.releaseRemoteMotors([motor_nick])
+                motor_handle.updateRemoteButton()
+                self.toStatusBar("Remote motor subscription released: %s" % motor_nick)
                 return
-    
-            # Otherwise, connect or reconnect.
-            self.parent.connectRemoteMotors(motor_nick) 
-            self.toStatusBar("Remote motor connection requested: %s" % motor_nick)
+
+            self.parent.connectRemoteMotors([motor_nick])
+            motor_handle.updateRemoteButton()
+            self.toStatusBar("Remote motor subscription requested: %s" % motor_nick)
             return
     
     def pressedConnectOneRemoteMotor(self):
@@ -206,7 +223,7 @@ class MotorController_GUI(QtWidgets.QMainWindow, Ui_Form):
                     return
     
                 self.parent.connectRemoteMotors(motor_nick)
-                self.toStatusBar("Remote motor connection requested: %s" % motor_nick)
+                self.toStatusBar("Remote motor subscription requested: %s" % motor_nick)
                 return    
     
     def changeItem(self, row_idx, col_idx, string):
@@ -231,6 +248,17 @@ class MotorController_GUI(QtWidgets.QMainWindow, Ui_Form):
             
     def toStatusBar(self, msg, duration=8000):
         self.statusbar.showMessage(msg, duration)
+
+    def changedServerConnection(self, connected, reason):
+        state = "connected" if connected else "offline"
+        self.Qserver.setText("Motor Server: %s" % state)
+        self.Qserver.setToolTip(str(reason))
+
+    def changedServerReady(self, ready):
+        if ready:
+            self.Qserver.setText("Motor Server: ready")
+        for motor_handle in self.motor_dict.values():
+            motor_handle.updateRemoteButton()
     
 class IndividualMotorGUI(QObject):
     
@@ -254,7 +282,7 @@ class IndividualMotorGUI(QObject):
         self.Qstatus   = self._createQLabel("Closed")
     
         # Individual remote connection button
-        self.Qconnect = QtWidgets.QPushButton("Connect")
+        self.Qconnect = QtWidgets.QPushButton("Subscribe")
     
         if serial_number == "remote" or ":" in nick:
             self.Qconnect.setVisible(True)
@@ -264,7 +292,7 @@ class IndividualMotorGUI(QObject):
         self.motor = motor
         
         self.Qposition.setEnabled(False)
-        self.Qstatus.setText("Closed")
+        self.Qstatus.setText("Offline" if serial_number == "remote" or ":" in nick else "Closed")
         self.Qstatus.setStyleSheet("background-color:rgb(20, 20, 20); color:rgb(200, 200, 200);")
         self.QcheckBox.toggled.connect(self.toggledCheckBox)
         
@@ -290,28 +318,36 @@ class IndividualMotorGUI(QObject):
         self.setPositionTextFromMotor(self.motor.position)
     
     def erroredMotor(self, nick):
-        self.changedStatus(self.nickname, "error")
+        # Broker rejections (BUSY/range/permission) do not imply a hardware
+        # fault; RemoteMotorHandler has already restored its authoritative
+        # hardware status before emitting the error text.
+        self.changedStatus(self.nickname, self.motor.status)
     
     def movedMotor(self, nick, position):
         self._editing_position = False
-        self.setPositionTextFromMotor(self.motor.position, force=True)
+        self.setPositionTextFromMotor(position, force=True)
     
     def homedMotor(self, nick):
         self._editing_position = False
-        self.Qposition.setText("0.000")
+        self.setPositionTextFromMotor(self.motor.position, force=True)
         
     def changedPosition(self, position):
         self.setPositionTextFromMotor(position)
-    
-        self.Qposition.setText("%.3f" % position)
+
     def setPositionTextFromMotor(self, position, force=False):
         if self._editing_position and not force:
             return
     
         self.Qposition.setText("%.3f" % position)
     def changedStatus(self, nick, status):
-        if status == "standby":
-            self.Qposition.setEnabled(True)
+        is_remote = self.serial == "remote" or ":" in self.nickname
+        remote_usable = (
+            not is_remote
+            or (self.motor.subscribed and self.motor.online)
+        )
+
+        if status in ("standby", "stopped"):
+            self.Qposition.setEnabled(remote_usable)
             self.Qstatus.setStyleSheet("background-color:rgb(10, 150, 10); color:rgb(200, 200, 200);")
     
         elif status == "initiating":
@@ -326,7 +362,7 @@ class IndividualMotorGUI(QObject):
             self.Qposition.setEnabled(False)
             self.Qstatus.setStyleSheet("background-color:rgb(150, 10, 10); color:rgb(200, 200, 200);")
     
-        elif status == "closed":
+        elif status in ("closed", "released", "offline", "subscribing"):
             self.Qposition.setEnabled(False)
             self.Qstatus.setStyleSheet("background-color:rgb(20, 20, 20); color:rgb(200, 200, 200);")
     
@@ -335,33 +371,19 @@ class IndividualMotorGUI(QObject):
             self.Qstatus.setStyleSheet("background-color:rgb(150, 10, 10); color:rgb(200, 200, 200);")
     
         self.Qstatus.setText(status)
-    
+        self.updateRemoteButton()
+
+    def updateRemoteButton(self):
         is_remote = self.serial == "remote" or ":" in self.nickname
-    
-        if is_remote:
-            if status == "standby":
-                self.Qconnect.setText("Disconnect")
-                self.Qconnect.setEnabled(True)
-        
-            elif status == "connecting":
-                self.Qconnect.setText("Connecting...")
-                self.Qconnect.setEnabled(False)
-        
-            elif status == "initiating":
-                self.Qconnect.setText("Disconnect")
-                self.Qconnect.setEnabled(False)
-        
-            elif status == "closed":
-                self.Qconnect.setText("Connect")
-                self.Qconnect.setEnabled(True)
-        
-            elif status == "error":
-                self.Qconnect.setText("Reconnect")
-                self.Qconnect.setEnabled(True)
-        
-            elif status in ["moving", "homing"]:
-                self.Qconnect.setText("Disconnect")
-                self.Qconnect.setEnabled(False)
+        if not is_remote:
+            return
+        if self.motor.subscribed:
+            self.Qconnect.setText("Release")
+        elif self.motor.status == "subscribing":
+            self.Qconnect.setText("Subscribing...")
+        else:
+            self.Qconnect.setText("Subscribe")
+        self.Qconnect.setEnabled(self.motor.status not in ("moving", "homing", "initiating"))
             
     def updateStatus(self):
         position = self.motor.position
